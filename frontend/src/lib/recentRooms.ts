@@ -1,0 +1,61 @@
+import type { RecentRoom, Tournament } from "./types";
+
+const RECENT_ROOMS_KEY = "padelo.recentRooms";
+const MAX_RECENT_ROOMS = 8;
+
+export function getRecentRooms(): RecentRoom[] {
+  try {
+    const raw = localStorage.getItem(RECENT_ROOMS_KEY);
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(isRecentRoom).slice(0, MAX_RECENT_ROOMS);
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentTournament(tournament: Tournament): RecentRoom[] {
+  const room: RecentRoom = {
+    code: tournament.roomCode,
+    name: tournament.name,
+    lastOpenedAt: new Date().toISOString(),
+    status: tournament.status,
+  };
+  const rooms = [room, ...getRecentRooms().filter((candidate) => candidate.code !== room.code)].slice(
+    0,
+    MAX_RECENT_ROOMS,
+  );
+
+  localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(rooms));
+
+  return rooms;
+}
+
+export function clearRecentRooms(): void {
+  localStorage.removeItem(RECENT_ROOMS_KEY);
+}
+
+function isRecentRoom(value: unknown): value is RecentRoom {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Partial<RecentRoom>;
+
+  return (
+    typeof candidate.code === "string" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.lastOpenedAt === "string" &&
+    (candidate.status === "active" || candidate.status === "finished")
+  );
+}
+
