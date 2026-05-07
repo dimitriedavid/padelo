@@ -1,38 +1,72 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
-    command: pnpm run dev
+      target: runner
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://padelo:padelo@postgres:5432/padelo
+      DATABASE_URL: postgres://${POSTGRES_USER:-padelo}:${POSTGRES_PASSWORD:-padelo}@postgres:5432/${POSTGRES_DB:-padelo}
       HOST: 0.0.0.0
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 8123
-    ports:
-      - "8123:8123"
-    volumes:
-      - ./backend:/app
-      - backend_node_modules:/app/node_modules
+    expose:
+      - "8123"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8123/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ./backend
+      target: build
+    command: pnpm db:migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-padelo}:${POSTGRES_PASSWORD:-padelo}@postgres:5432/${POSTGRES_DB:-padelo}
+    profiles:
+      - migrate
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: padelo
-      POSTGRES_PASSWORD: padelo
-      POSTGRES_USER: padelo
+      POSTGRES_DB: ${POSTGRES_DB:-padelo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-padelo}
+      POSTGRES_USER: ${POSTGRES_USER:-padelo}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U padelo -d padelo"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  backend_node_modules:
   postgres_data:
