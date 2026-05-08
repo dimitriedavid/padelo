@@ -1,3 +1,7 @@
+import { loadEnvFile } from "./env.js";
+
+loadEnvFile();
+
 export type AppConfig = {
   databaseUrl: string;
   host: string;

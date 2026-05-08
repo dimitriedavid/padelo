@@ -1,21 +1,23 @@
-import { Check, Copy, Flag, RefreshCw } from "lucide-react";
-import { useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { EventLog } from "../components/EventLog";
-import { Leaderboard } from "../components/Leaderboard";
-import { MatchCard } from "../components/MatchCard";
-import { PageShell } from "../components/PageShell";
-import { RoundsList } from "../components/RoundsList";
+import { Scoreboard } from "../components/Scoreboard";
+import { ScoreEntrySheet } from "../components/ScoreEntrySheet";
+import type {
+  ResultSubmission,
+  ScoreboardLogEntry,
+  ScoreboardPlayer,
+  ScoreboardTournament,
+} from "../components/scoreboard-types";
 import { Seo } from "../components/Seo";
-import { finishTournament } from "../lib/api";
+import { finishTournament, getTournamentEvents, upsertMatchResult } from "../lib/api";
 import { errorMessage } from "../lib/errors";
-import { displayMode, displayRoundCount, normalizeRoomInput } from "../lib/tournament";
+import { normalizeRoomInput } from "../lib/tournament";
+import type { MatchResult, Tournament, TournamentEvent } from "../lib/types";
 import { useTournament } from "../lib/useTournament";
 
 export function TournamentRoomPage() {
@@ -23,29 +25,113 @@ export function TournamentRoomPage() {
   const roomCode = params.roomCode ? normalizeRoomInput(params.roomCode) : undefined;
   const navigate = useNavigate();
   const { tournament, isLoading, error, setTournament, refresh } = useTournament(roomCode);
+  const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
+  const [openMatchId, setOpenMatchId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<ScoreboardLogEntry[]>([]);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!tournament) {
+      return;
+    }
+
+    setSelectedRoundIndex(tournament.state.currentRoundIndex);
+  }, [tournament?.roomCode, tournament?.state.currentRoundIndex]);
+
+  useEffect(() => {
+    if (!tournament) {
+      return;
+    }
+
+    let cancelled = false;
+
+    getTournamentEvents(tournament.roomCode)
+      .then((events) => {
+        if (!cancelled) {
+          setLogs(events.map(toLogEntry));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLogs([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament?.roomCode, tournament?.stateVersion]);
+
+  const scoreboardTournament = useMemo(() => {
+    if (!tournament) {
+      return null;
+    }
+
+    const safeRoundIndex = Math.min(
+      selectedRoundIndex,
+      Math.max(0, tournament.state.rounds.length - 1),
+    );
+
+    return toScoreboardTournament(tournament, safeRoundIndex);
+  }, [selectedRoundIndex, tournament]);
+
+  const openMatch = useMemo(() => {
+    if (!scoreboardTournament || !openMatchId) {
+      return null;
+    }
+
+    return (
+      scoreboardTournament.rounds[scoreboardTournament.currentRoundIndex]?.matches.find(
+        (match) => match.id === openMatchId,
+      ) ?? null
+    );
+  }, [openMatchId, scoreboardTournament]);
 
   if (!roomCode) {
     return <Navigate replace to="/" />;
   }
 
-  const currentRound = tournament?.state.rounds[tournament.state.currentRoundIndex];
   const pageTitle = tournament ? `${tournament.name} Scoreboard | Padelo` : "Padel Tournament Scoreboard | Padelo";
   const pageDescription = tournament
     ? `Live scoreboard for ${tournament.name}, with current round, match results, leaderboard, and tournament history.`
     : "View a Padelo tournament room with live scores, match results, rounds, and leaderboard updates.";
 
-  const copyLink = async () => {
-    setCopied(false);
-    await navigator.clipboard?.writeText(window.location.href);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+  const shareRoom = async () => {
+    const url = window.location.href;
+
+    if (navigator.share) {
+      await navigator.share({ title: pageTitle, url });
+      return;
+    }
+
+    await navigator.clipboard?.writeText(url);
+  };
+
+  const submitResult = async (payload: ResultSubmission) => {
+    if (!tournament) {
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      const next = await upsertMatchResult(tournament.roomCode, payload.matchId, {
+        winningSide: payload.winningSide,
+        losingScore: payload.losingScore,
+        expectedStateVersion: payload.expectedStateVersion,
+      });
+      setTournament(next);
+      setLogs((await getTournamentEvents(next.roomCode)).map(toLogEntry));
+    } catch (caught) {
+      setActionError(errorMessage(caught));
+      await refresh();
+      throw caught;
+    }
   };
 
   const finish = async () => {
-    if (!tournament) {
+    if (!tournament || isFinishing) {
       return;
     }
 
@@ -55,8 +141,8 @@ export function TournamentRoomPage() {
       return;
     }
 
-    setIsFinishing(true);
     setActionError(null);
+    setIsFinishing(true);
 
     try {
       const next = await finishTournament(tournament.roomCode);
@@ -70,14 +156,7 @@ export function TournamentRoomPage() {
   };
 
   return (
-    <PageShell
-      actions={
-        <Button onClick={copyLink} size="sm" variant="secondary">
-          {copied ? <Check size={17} /> : <Copy size={17} />}
-          <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
-        </Button>
-      }
-    >
+    <>
       <Seo
         description={pageDescription}
         path={`/t/${roomCode}`}
@@ -85,124 +164,192 @@ export function TournamentRoomPage() {
         structuredData={null}
         title={pageTitle}
       />
+
       {isLoading ? (
-        <div className="grid min-h-[50vh] place-items-center text-primary">
-          <Spinner />
+        <div className="grid h-dvh place-items-center bg-background text-primary">
+          <Spinner className="size-6" />
         </div>
       ) : null}
 
       {!isLoading && error ? (
-        <div className="mx-auto max-w-xl">
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={refresh} variant="secondary">
+        <div className="grid h-dvh place-items-center bg-background px-4">
+          <div className="w-full max-w-sm space-y-3">
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+            <Button className="w-full" onClick={refresh} variant="secondary">
               <RefreshCw size={16} />
               Retry
             </Button>
-            <Button asChild variant="outline">
-              <Link to="/">Home</Link>
-            </Button>
           </div>
         </div>
       ) : null}
 
-      {tournament ? (
-        <div className="space-y-5">
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="uppercase">
-                  {tournament.roomCode}
-                </Badge>
-                <Badge variant="outline">
-                  {displayMode(tournament.config.mode)}
-                </Badge>
-                <Badge variant="outline">
-                  {displayRoundCount(tournament)}
-                </Badge>
-              </div>
-              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{tournament.name}</h1>
-              <div className="grid grid-cols-3 gap-2 sm:max-w-lg">
-                <Stat label="Players" value={String(tournament.state.players.length)} />
-                <Stat label="Courts" value={String(tournament.config.courtCount)} />
-                <Stat label="Target" value={String(tournament.state.targetScore)} />
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2 lg:justify-end">
-              {tournament.status === "finished" ? (
-                <Button asChild className="h-11">
-                  <Link to={`/t/${tournament.roomCode}/done`}>Results</Link>
-                </Button>
-              ) : (
-                <Button disabled={isFinishing} onClick={finish} variant="destructive">
-                  {isFinishing ? <Spinner /> : <Flag size={17} />}
-                  Finish
-                </Button>
-              )}
-            </div>
-          </section>
-
-          {actionError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{actionError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="space-y-5">
-              <section className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold text-foreground">
-                    Round {(currentRound?.index ?? 0) + 1}
-                  </h2>
-                  <Badge className="capitalize" variant="secondary">
-                    {currentRound?.status ?? "pending"}
-                  </Badge>
-                </div>
-
-                {currentRound ? (
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    {currentRound.matches.map((match) => (
-                      <MatchCard
-                        disabled={tournament.status === "finished"}
-                        key={match.id}
-                        match={match}
-                        onTournamentChange={setTournament}
-                        tournament={tournament}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <Alert>
-                    <AlertDescription>No current round.</AlertDescription>
-                  </Alert>
-                )}
-              </section>
-
-              <RoundsList tournament={tournament} />
-            </div>
-
-            <aside className="space-y-5">
-              <Leaderboard tournament={tournament} />
-              <EventLog roomCode={tournament.roomCode} />
-            </aside>
-          </div>
-        </div>
+      {scoreboardTournament ? (
+        <>
+          <Scoreboard
+            log={logs}
+            onBack={() => navigate("/")}
+            onChangeRound={setSelectedRoundIndex}
+            onEnterScore={setOpenMatchId}
+            onMore={finish}
+            onShare={shareRoom}
+            tournament={scoreboardTournament}
+            upNext={upNextText(scoreboardTournament)}
+          />
+          <ScoreEntrySheet
+            error={actionError}
+            expectedStateVersion={tournament?.stateVersion ?? 0}
+            match={openMatch}
+            onOpenChange={(open) => {
+              if (!open) {
+                setOpenMatchId(null);
+                setActionError(null);
+              }
+            }}
+            onSubmit={submitResult}
+            open={openMatch !== null}
+            roundIndex={scoreboardTournament.currentRoundIndex}
+            targetScore={scoreboardTournament.targetScore}
+          />
+        </>
       ) : null}
-    </PageShell>
+    </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="text-xs font-medium text-muted-foreground">{label}</div>
-        <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
-      </CardContent>
-    </Card>
-  );
+function toScoreboardTournament(tournament: Tournament, currentRoundIndex: number): ScoreboardTournament {
+  const players = tournament.state.players.map(toScoreboardPlayer);
+  const playerMap = new Map(players.map((player) => [player.id, player]));
+  const getPlayer = (playerId: string) =>
+    playerMap.get(playerId) ?? {
+      id: playerId,
+      initials: initialsFor(playerId),
+      name: playerId,
+    };
+
+  const rounds = tournament.state.rounds.map((round) => ({
+    index: round.index,
+    status: round.status,
+    matches: round.matches.map((match) => ({
+      id: match.id,
+      courtNumber: match.courtNumber,
+      sideA: [getPlayer(match.sideA[0]), getPlayer(match.sideA[1])] as [ScoreboardPlayer, ScoreboardPlayer],
+      sideB: [getPlayer(match.sideB[0]), getPlayer(match.sideB[1])] as [ScoreboardPlayer, ScoreboardPlayer],
+      result: match.result ?? undefined,
+    })),
+  }));
+
+  return {
+    roomCode: tournament.roomCode,
+    name: tournament.name,
+    mode: tournament.config.mode,
+    targetScore: tournament.state.targetScore,
+    totalRounds: rounds.length,
+    currentRoundIndex,
+    courts: tournament.config.courtCount,
+    players,
+    rounds,
+    standings: tournament.state.leaderboard.map((entry) => {
+      const player = getPlayer(entry.playerId);
+
+      return {
+        ...player,
+        played: entry.played,
+        wins: entry.wins,
+        losses: Math.max(0, entry.played - entry.wins),
+        pointDiff: entry.pointDiff,
+      };
+    }),
+  };
+}
+
+function toScoreboardPlayer(player: Tournament["state"]["players"][number]): ScoreboardPlayer {
+  return {
+    id: player.id,
+    name: player.name,
+    initials: initialsFor(player.name),
+  };
+}
+
+function initialsFor(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
+  }
+
+  return value.trim().slice(0, 2).toUpperCase() || "??";
+}
+
+function upNextText(tournament: ScoreboardTournament) {
+  const round = tournament.rounds[tournament.currentRoundIndex + 1];
+  const match = round?.matches[0];
+
+  if (!match) {
+    return undefined;
+  }
+
+  return `${match.sideA[0].name} + ${match.sideA[1].name} vs ${match.sideB[0].name} + ${match.sideB[1].name}`;
+}
+
+function toLogEntry(event: TournamentEvent): ScoreboardLogEntry {
+  const score = scoreFromPayload(event.payload);
+
+  return {
+    ago: formatRelativeTime(event.createdAt),
+    text: eventText(event),
+    score,
+  };
+}
+
+function formatRelativeTime(value: string) {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+
+  if (elapsedSeconds < 60) {
+    return "now";
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+
+  return `${elapsedDays}d ago`;
+}
+
+function eventText(event: TournamentEvent) {
+  const matchId = typeof event.payload.matchId === "string" ? event.payload.matchId.toUpperCase() : null;
+
+  switch (event.type) {
+    case "tournament_created":
+      return "Tournament created";
+    case "match_result_upserted":
+      return matchId ? `Score saved for ${matchId}` : "Score saved";
+    case "match_result_deleted":
+      return matchId ? `Score cleared for ${matchId}` : "Score cleared";
+    case "tournament_finished":
+      return "Tournament finished";
+    case "play_again_created":
+      return "Play-again room created";
+  }
+}
+
+function scoreFromPayload(payload: Record<string, unknown>) {
+  const result = payload.result as Partial<MatchResult> | undefined;
+
+  if (typeof result?.sideAScore === "number" && typeof result.sideBScore === "number") {
+    return `${result.sideAScore}-${result.sideBScore}`;
+  }
+
+  return undefined;
 }

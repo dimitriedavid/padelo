@@ -1,19 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { defineConfig } from "drizzle-kit";
 
-loadEnvFile();
-
-export default defineConfig({
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://padelo:padelo@localhost:5433/padelo",
-  },
-});
-
-function loadEnvFile(filePath = resolve(process.cwd(), ".env")): void {
+export function loadEnvFile(filePath = resolve(process.cwd(), ".env")): void {
   if (!existsSync(filePath)) {
     return;
   }
@@ -26,10 +14,19 @@ function loadEnvFile(filePath = resolve(process.cwd(), ".env")): void {
     }
 
     const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
-    const key = match?.[1];
-    const rawValue = match?.[2];
 
-    if (!key || rawValue === undefined || process.env[key] !== undefined) {
+    if (!match) {
+      continue;
+    }
+
+    const key = match[1];
+    const rawValue = match[2];
+
+    if (!key || rawValue === undefined) {
+      continue;
+    }
+
+    if (process.env[key] !== undefined) {
       continue;
     }
 

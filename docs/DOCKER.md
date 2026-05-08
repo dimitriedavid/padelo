@@ -83,10 +83,15 @@ Expected `PORTS` entries look like internal container ports only, for example
 
 ## Development database
 
+The development database intentionally uses separate `DEV_POSTGRES_*`
+variables, Compose project, and volume from production. It binds to host port
+`5433` by default so a local backend can run without touching the production
+Compose database.
+
 Start Postgres only:
 
 ```sh
-docker compose -f docker-compose.dev.yml up -d
+docker compose -p padelo-dev -f docker-compose.dev.yml up -d
 ```
 
 Run the backend manually from `backend/`:
@@ -96,6 +101,12 @@ pnpm install
 cp .env.example .env
 pnpm db:migrate
 pnpm run dev
+```
+
+`backend/.env.example` points at the isolated development database:
+
+```txt
+DATABASE_URL=postgres://padelo:padelo@localhost:5433/padelo
 ```
 
 Run the frontend manually from `frontend/`:
@@ -114,8 +125,18 @@ http://localhost:5173
 The Vite development server proxies `/api` to the backend on `localhost:8123`
 by default.
 
-If you set custom `POSTGRES_*` values in the root `.env`, update
-`backend/.env` so `DATABASE_URL` uses the same credentials.
+If you set custom `DEV_POSTGRES_*` values in the root `.env`, update
+`backend/.env` so `DATABASE_URL` uses the same credentials. Do not use
+production `POSTGRES_*` values for the dev compose file.
+
+Stop the development database without deleting its data:
+
+```sh
+docker compose -p padelo-dev -f docker-compose.dev.yml down
+```
+
+Only add `-v` when you intentionally want to delete the local development
+database volume.
 
 ## Environment
 
