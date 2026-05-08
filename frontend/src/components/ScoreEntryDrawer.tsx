@@ -1,5 +1,5 @@
-// Padelo score entry drawer. Submits the narrow API payload:
-// { winningSide, losingScore, expectedStateVersion }.
+// Padelo score entry drawer. Scores are fixed-total: sideAScore + sideBScore
+// must equal the tournament target score.
 
 import { Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -15,9 +15,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import { AvatarStack } from "./PadeloBrand";
 import type { ResultSubmission, ScoreboardMatch } from "./scoreboard-types";
-import type { MatchSide } from "@/lib/types";
 
 type ScoreEntryDrawerProps = {
   open: boolean;
@@ -42,8 +40,7 @@ export function ScoreEntryDrawer({
   error,
   onSubmit,
 }: ScoreEntryDrawerProps) {
-  const [winner, setWinner] = useState<MatchSide>("A");
-  const [losing, setLosing] = useState(targetScore - 3);
+  const [sideAScore, setSideAScore] = useState(defaultSideAScore(targetScore));
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,24 +49,36 @@ export function ScoreEntryDrawer({
     }
 
     if (match.result) {
-      setWinner(match.result.winningSide);
-      setLosing(match.result.winningSide === "A" ? match.result.sideBScore : match.result.sideAScore);
+      setSideAScore(match.result.sideAScore);
       return;
     }
 
-    setWinner("A");
-    setLosing(Math.max(0, targetScore - 3));
+    setSideAScore(defaultSideAScore(targetScore));
   }, [match, targetScore]);
 
   if (!match) {
     return null;
   }
 
+  const sideBScore = targetScore - sideAScore;
+  const winningSide = sideAScore === sideBScore ? null : sideAScore > sideBScore ? "A" : "B";
   const sides = [
-    { id: "A" as const, players: match.sideA },
-    { id: "B" as const, players: match.sideB },
+    { id: "A" as const, players: match.sideA, score: sideAScore },
+    { id: "B" as const, players: match.sideB, score: sideBScore },
   ];
-  const summary = winner === "A" ? `${targetScore}-${losing} for A` : `${losing}-${targetScore} for B`;
+  const summary = `${sideAScore}-${sideBScore}`;
+
+  const makeWinner = (side: "A" | "B") => {
+    if (sideAScore === sideBScore) {
+      const winnerScore = defaultSideAScore(targetScore);
+      setSideAScore(side === "A" ? winnerScore : targetScore - winnerScore);
+      return;
+    }
+
+    const winnerScore = Math.max(sideAScore, sideBScore);
+    const loserScore = Math.min(sideAScore, sideBScore);
+    setSideAScore(side === "A" ? winnerScore : loserScore);
+  };
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -77,8 +86,8 @@ export function ScoreEntryDrawer({
     try {
       await onSubmit({
         matchId: match.id,
-        winningSide: winner,
-        losingScore: losing,
+        sideAScore,
+        sideBScore,
         expectedStateVersion,
       });
       onOpenChange(false);
@@ -98,10 +107,10 @@ export function ScoreEntryDrawer({
               Court {match.courtNumber} · Round {roundIndex + 1}
             </p>
             <DrawerTitle className="font-display text-2xl font-semibold -tracking-[0.025em]">
-              Who won?
+              Enter score
             </DrawerTitle>
             <DrawerDescription className="text-xs">
-              Target {targetScore}. Tap the winning side, then enter the losing score.
+              Target {targetScore} total. Enter Side A score; Side B is calculated.
             </DrawerDescription>
           </DrawerHeader>
 
@@ -113,7 +122,7 @@ export function ScoreEntryDrawer({
 
           <div className="flex flex-col gap-2">
             {sides.map((side) => {
-              const active = winner === side.id;
+              const active = winningSide === side.id;
 
               return (
                 <button
@@ -124,7 +133,7 @@ export function ScoreEntryDrawer({
                       : "bg-card hover:bg-secondary/60",
                   )}
                   key={side.id}
-                  onClick={() => setWinner(side.id)}
+                  onClick={() => makeWinner(side.id)}
                   type="button"
                 >
                   <span
@@ -136,8 +145,6 @@ export function ScoreEntryDrawer({
                     {active ? <span className="size-2.5 rounded-full bg-accent-foreground" /> : null}
                   </span>
 
-                  <AvatarStack players={side.players} />
-
                   <div className="min-w-0 flex-1 leading-tight">
                     <div
                       className={cn(
@@ -147,7 +154,7 @@ export function ScoreEntryDrawer({
                     >
                       Side {side.id}
                     </div>
-                    <div className="truncate text-[14px] font-semibold">
+                    <div className="truncate text-base font-semibold">
                       {side.players[0].name} + {side.players[1].name}
                     </div>
                   </div>
@@ -158,7 +165,7 @@ export function ScoreEntryDrawer({
                       active ? "" : "text-muted-foreground/60",
                     )}
                   >
-                    {active ? targetScore : losing}
+                    {side.score}
                   </div>
                 </button>
               );
@@ -166,11 +173,11 @@ export function ScoreEntryDrawer({
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="text-[11px] tracking-widest text-muted-foreground uppercase">Loser score</div>
+            <div className="text-[11px] tracking-widest text-muted-foreground uppercase">Side A score</div>
             <div className="flex items-center justify-between rounded-2xl border bg-card p-2 pl-4">
               <Button
                 className="size-10 rounded-lg"
-                onClick={() => setLosing((score) => Math.max(0, score - 1))}
+                onClick={() => setSideAScore((score) => Math.max(0, score - 1))}
                 size="icon"
                 type="button"
                 variant="secondary"
@@ -178,11 +185,11 @@ export function ScoreEntryDrawer({
                 <Minus className="size-4" />
               </Button>
               <span className="font-display text-[56px] leading-none font-bold -tracking-[0.04em] text-primary tabular-nums">
-                {losing}
+                {sideAScore}
               </span>
               <Button
                 className="size-10 rounded-lg"
-                onClick={() => setLosing((score) => Math.min(targetScore - 1, score + 1))}
+                onClick={() => setSideAScore((score) => Math.min(targetScore, score + 1))}
                 size="icon"
                 type="button"
               >
@@ -190,8 +197,8 @@ export function ScoreEntryDrawer({
               </Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_PICKS.filter((score) => score < targetScore).map((score) => {
-                const active = losing === score;
+              {QUICK_PICKS.filter((score) => score <= targetScore).map((score) => {
+                const active = sideAScore === score;
 
                 return (
                   <button
@@ -202,7 +209,7 @@ export function ScoreEntryDrawer({
                         : "bg-card text-foreground/80 hover:bg-secondary/60",
                     )}
                     key={score}
-                    onClick={() => setLosing(score)}
+                    onClick={() => setSideAScore(score)}
                     type="button"
                   >
                     {score}
@@ -226,4 +233,8 @@ export function ScoreEntryDrawer({
       </DrawerContent>
     </Drawer>
   );
+}
+
+function defaultSideAScore(targetScore: number) {
+  return Math.min(targetScore, Math.floor(targetScore / 2) + 1);
 }

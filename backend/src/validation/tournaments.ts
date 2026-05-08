@@ -2,7 +2,6 @@ import { badRequest } from "../domain/errors.js";
 import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
-  MatchSide,
   RoundCount,
   TournamentMode,
   UpsertMatchResultRequest,
@@ -44,8 +43,8 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
 
 export function parseUpsertMatchResultRequest(input: unknown): UpsertMatchResultRequest {
   const value = requireObject(input);
-  const winningSide = parseMatchSide(value.winningSide);
-  const losingScore = requireInteger(value.losingScore, "losingScore", 0, MAX_TARGET_SCORE);
+  const sideAScore = requireInteger(value.sideAScore, "sideAScore", 0, MAX_TARGET_SCORE);
+  const sideBScore = requireInteger(value.sideBScore, "sideBScore", 0, MAX_TARGET_SCORE);
   const expectedStateVersion = requireInteger(
     value.expectedStateVersion,
     "expectedStateVersion",
@@ -54,8 +53,8 @@ export function parseUpsertMatchResultRequest(input: unknown): UpsertMatchResult
   );
 
   return {
-    winningSide,
-    losingScore,
+    sideAScore,
+    sideBScore,
     expectedStateVersion,
   };
 }
@@ -160,16 +159,6 @@ function parseRoundCount(input: unknown): RoundCount {
   throw badRequest("validation_error", "Round count must be fixed or auto.", {
     field: "roundCount.type",
   });
-}
-
-function parseMatchSide(input: unknown): MatchSide {
-  if (input !== "A" && input !== "B") {
-    throw badRequest("validation_error", "Winning side must be A or B.", {
-      field: "winningSide",
-    });
-  }
-
-  return input;
 }
 
 function requireObject(input: unknown): Record<string, unknown> {

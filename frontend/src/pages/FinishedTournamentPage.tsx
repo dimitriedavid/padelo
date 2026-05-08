@@ -38,7 +38,8 @@ export function FinishedTournamentPage() {
       `${tournament.name} results`,
       ...tournament.state.leaderboard.map((entry, index) => {
         const player = tournament.state.players.find((candidate) => candidate.id === entry.playerId);
-        return `${index + 1}. ${player?.name ?? entry.playerId} ${entry.pointsFor}-${entry.pointsAgainst} (${entry.pointDiff >= 0 ? "+" : ""}${entry.pointDiff})`;
+        const losses = Math.max(0, entry.played - entry.wins - (entry.ties ?? 0));
+        return `${index + 1}. ${player?.name ?? entry.playerId} ${entry.pointsFor} pts (${entry.wins}W ${(entry.ties ?? 0)}T ${losses}L)`;
       }),
     ];
 

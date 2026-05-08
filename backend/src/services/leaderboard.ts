@@ -12,6 +12,7 @@ export function calculateLeaderboard(
       playerId: player.id,
       played: 0,
       wins: 0,
+      ties: 0,
       pointsFor: 0,
       pointsAgainst: 0,
       pointDiff: 0,
@@ -27,6 +28,18 @@ export function calculateLeaderboard(
       applySideResult(entries, match.sideA, match.result.sideAScore, match.result.sideBScore);
       applySideResult(entries, match.sideB, match.result.sideBScore, match.result.sideAScore);
 
+      if (match.result.winningSide === null) {
+        for (const playerId of [...match.sideA, ...match.sideB]) {
+          const entry = entries.get(playerId);
+
+          if (entry) {
+            entry.ties += 1;
+          }
+        }
+
+        continue;
+      }
+
       const winningPlayers = match.result.winningSide === "A" ? match.sideA : match.sideB;
 
       for (const playerId of winningPlayers) {
@@ -40,22 +53,28 @@ export function calculateLeaderboard(
   }
 
   return [...entries.values()].sort((a, b) => {
+    const pointsFor = b.pointsFor - a.pointsFor;
+
+    if (pointsFor !== 0) {
+      return pointsFor;
+    }
+
     const wins = b.wins - a.wins;
 
     if (wins !== 0) {
       return wins;
     }
 
+    const ties = b.ties - a.ties;
+
+    if (ties !== 0) {
+      return ties;
+    }
+
     const pointDiff = b.pointDiff - a.pointDiff;
 
     if (pointDiff !== 0) {
       return pointDiff;
-    }
-
-    const pointsFor = b.pointsFor - a.pointsFor;
-
-    if (pointsFor !== 0) {
-      return pointsFor;
     }
 
     return (playerOrder.get(a.playerId) ?? 0) - (playerOrder.get(b.playerId) ?? 0);
@@ -81,4 +100,3 @@ function applySideResult(
     entry.pointDiff = entry.pointsFor - entry.pointsAgainst;
   }
 }
-

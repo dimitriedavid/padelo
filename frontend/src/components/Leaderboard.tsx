@@ -26,17 +26,12 @@ export function Leaderboard({ tournament }: LeaderboardProps) {
               <div className="min-w-0">
                 <div className="truncate font-medium text-foreground">{playerName(tournament, entry.playerId)}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {entry.played} played · {entry.wins} wins
+                  {entry.wins}W {(entry.ties ?? 0)}T {Math.max(0, entry.played - entry.wins - (entry.ties ?? 0))}L
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-sm font-semibold text-foreground">
-                  {entry.pointDiff >= 0 ? "+" : ""}
-                  {entry.pointDiff}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {entry.pointsFor}-{entry.pointsAgainst}
-                </div>
+                <div className="font-display text-2xl leading-none font-bold text-primary">{entry.pointsFor}</div>
+                <div className="text-xs text-muted-foreground">points</div>
               </div>
             </div>
           </div>

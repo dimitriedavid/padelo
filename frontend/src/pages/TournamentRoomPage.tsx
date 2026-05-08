@@ -132,8 +132,8 @@ export function TournamentRoomPage() {
 
     try {
       const next = await upsertMatchResult(tournament.roomCode, payload.matchId, {
-        winningSide: payload.winningSide,
-        losingScore: payload.losingScore,
+        sideAScore: payload.sideAScore,
+        sideBScore: payload.sideBScore,
         expectedStateVersion: payload.expectedStateVersion,
       });
       setTournament(next);
@@ -302,6 +302,7 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
     targetScore: tournament.state.targetScore,
     totalRounds: rounds.length,
     currentRoundIndex,
+    activeRoundIndex: tournament.state.currentRoundIndex,
     courts: tournament.config.courtCount,
     players,
     rounds,
@@ -311,8 +312,10 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
       return {
         ...player,
         played: entry.played,
+        points: entry.pointsFor,
         wins: entry.wins,
-        losses: Math.max(0, entry.played - entry.wins),
+        ties: entry.ties ?? 0,
+        losses: Math.max(0, entry.played - entry.wins - (entry.ties ?? 0)),
         pointDiff: entry.pointDiff,
       };
     }),

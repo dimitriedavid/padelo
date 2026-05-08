@@ -1,6 +1,6 @@
 // Padelo scoreboard screen — mobile-first, shadcn/ui + Tailwind.
 
-import { House, MoreHorizontal, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, House, MoreHorizontal, Share2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type KeyboardEvent, useMemo, useState } from "react";
 
@@ -33,10 +33,6 @@ function won(match: ScoreboardMatch, side: MatchSide) {
   return match.result?.winningSide === side;
 }
 
-function fmtDiff(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
 function RoomCodeChip({ code, onClick }: { code: string; onClick: () => void }) {
   return (
     <Badge
@@ -52,48 +48,107 @@ function RoomCodeChip({ code, onClick }: { code: string; onClick: () => void }) 
   );
 }
 
-function RoundChips({
+type RoundPageItem = number | "ellipsis-start" | "ellipsis-end";
+
+function RoundPagination({
   total,
   current,
+  activeRound,
   onChange,
+  className,
 }: {
   total: number;
   current: number;
+  activeRound: number;
   onChange?: ((index: number) => void) | undefined;
+  className?: string | undefined;
 }) {
-  return (
-    <div className="flex items-center gap-3 px-4 pb-3">
-      <div className="flex flex-1 gap-2 overflow-x-auto">
-        {Array.from({ length: total }, (_, index) => {
-          const state = index === current ? "current" : index < current ? "done" : "future";
+  const pages = paginationItems(total, current);
+  const canGoPrevious = current > 0;
+  const canGoNext = current < total - 1;
 
+  return (
+    <nav aria-label="Round pagination" className={cn("flex items-center justify-center gap-1", className)}>
+      <Button
+        aria-label="Previous round"
+        className="size-10 shrink-0"
+        disabled={!canGoPrevious}
+        onClick={() => canGoPrevious && onChange?.(current - 1)}
+        size="icon"
+        type="button"
+        variant="outline"
+      >
+        <ChevronLeft className="size-5" />
+      </Button>
+
+      {pages.map((page) => {
+        if (typeof page !== "number") {
           return (
-            <Button
-              className={cn(
-                "size-11 shrink-0",
-                "font-display text-lg font-semibold tracking-tight tabular-nums",
-                "transition-colors",
-                state === "current" && "bg-primary text-primary-foreground",
-                state === "done" && "bg-accent text-accent-foreground",
-                state === "future" && "border bg-card text-muted-foreground",
-              )}
-              key={index}
-              onClick={() => onChange?.(index)}
-              size="icon"
-              type="button"
-              variant="ghost"
+            <span
+              aria-hidden="true"
+              className="grid size-9 shrink-0 place-items-center text-base font-semibold text-muted-foreground"
+              key={page}
             >
-              {index + 1}
-            </Button>
+              ...
+            </span>
           );
-        })}
-      </div>
-      <div className="font-display tracking-tight text-primary tabular-nums">
-        <span className="text-2xl font-bold">R{current + 1}</span>
-        <span className="text-sm text-muted-foreground">/{total}</span>
-      </div>
-    </div>
+        }
+
+        const pageIndex = page - 1;
+        const active = pageIndex === current;
+        const complete = pageIndex < activeRound;
+
+        return (
+          <Button
+            aria-current={active ? "page" : undefined}
+            aria-label={`Round ${page}`}
+            className={cn(
+              "size-10 shrink-0 font-display text-base font-semibold tracking-tight tabular-nums",
+              complete && !active && "border-accent bg-accent text-accent-foreground hover:bg-accent/80",
+              active && "bg-primary text-primary-foreground hover:bg-primary/90",
+            )}
+            key={page}
+            onClick={() => onChange?.(pageIndex)}
+            size="icon"
+            type="button"
+            variant={active ? "default" : "outline"}
+          >
+            {page}
+          </Button>
+        );
+      })}
+
+      <Button
+        aria-label="Next round"
+        className="size-10 shrink-0"
+        disabled={!canGoNext}
+        onClick={() => canGoNext && onChange?.(current + 1)}
+        size="icon"
+        type="button"
+        variant="outline"
+      >
+        <ChevronRight className="size-5" />
+      </Button>
+    </nav>
   );
+}
+
+function paginationItems(total: number, currentIndex: number): RoundPageItem[] {
+  const current = currentIndex + 1;
+
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  if (current <= 3) {
+    return [1, 2, 3, "ellipsis-end", total];
+  }
+
+  if (current >= total - 2) {
+    return [1, "ellipsis-start", total - 2, total - 1, total];
+  }
+
+  return [1, "ellipsis-start", current, "ellipsis-end", total];
 }
 
 function TeamRow({
@@ -109,7 +164,7 @@ function TeamRow({
   const score =
     match.result == null ? null : side === "A" ? match.result.sideAScore : match.result.sideBScore;
   const win = won(match, side);
-  const players = `${team[0].name} & ${team[1].name}`;
+  const players = `${team[0].name} + ${team[1].name}`;
 
   return (
     <div
@@ -142,16 +197,18 @@ function TeamRow({
 function CourtCard({
   match,
   targetScore,
+  editable,
   onEnterScore,
 }: {
   match: ScoreboardMatch;
   targetScore: number;
+  editable: boolean;
   onEnterScore: (matchId: string) => void;
 }) {
   const pending = match.result == null;
   const openScoreEntry = () => onEnterScore(match.id);
   const onCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
+    if (editable && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       openScoreEntry();
     }
@@ -159,24 +216,36 @@ function CourtCard({
 
   return (
     <div
-      aria-label={`${pending ? "Enter" : "Edit"} score for court ${match.courtNumber}`}
-      className="flex cursor-pointer touch-manipulation flex-col gap-2.5 rounded-2xl border bg-card p-3 shadow-sm transition-colors hover:bg-card/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none active:bg-muted/60"
-      onClick={openScoreEntry}
+      aria-label={`${editable ? (pending ? "Enter" : "Edit") : "View"} score for court ${match.courtNumber}`}
+      className={cn(
+        "flex touch-manipulation flex-col gap-2.5 rounded-2xl border bg-card p-3 shadow-sm transition-colors",
+        editable
+          ? "cursor-pointer hover:bg-card/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none active:bg-muted/60"
+          : "cursor-default",
+      )}
+      onClick={editable ? openScoreEntry : undefined}
       onKeyDown={onCardKeyDown}
-      role="button"
-      tabIndex={0}
+      role={editable ? "button" : undefined}
+      tabIndex={editable ? 0 : undefined}
     >
       <div className="flex items-center gap-2 px-1">
         <Badge className="h-8 rounded-md bg-accent px-2.5 py-1 text-sm font-semibold text-accent-foreground">
           Court {match.courtNumber}
         </Badge>
-        {pending ? (
+        {pending && editable ? (
           <span className="text-sm font-semibold text-destructive">awaiting result</span>
+        ) : pending ? (
+          <span className="text-sm font-semibold text-muted-foreground">locked</span>
         ) : (
           <span className="text-sm text-muted-foreground">final</span>
         )}
-        <span className="ml-auto flex h-10 shrink-0 items-center px-3 text-base font-semibold text-primary">
-          {pending ? "Enter >" : "Edit"}
+        <span
+          className={cn(
+            "ml-auto flex h-10 shrink-0 items-center px-3 text-base font-semibold",
+            editable ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          {editable ? (pending ? "Enter >" : "Edit") : "Locked"}
         </span>
       </div>
       <TeamRow match={match} side="A" targetScore={targetScore} />
@@ -186,39 +255,18 @@ function CourtCard({
 }
 
 function LeaderboardRow({ player, rank }: { player: ScoreboardStanding; rank: number }) {
-  const lead = rank === 1;
+  const record = `${player.wins}W ${player.ties}T ${player.losses}L`;
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-xl border px-3 py-2.5",
-        lead ? "border-accent bg-accent text-accent-foreground" : "bg-card",
-      )}
-    >
-      <span
-        className={cn(
-          "w-5 text-right font-display text-base font-bold tracking-tight tabular-nums",
-          lead ? "" : "text-muted-foreground",
-        )}
-      >
+    <div className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5">
+      <span className="w-5 text-right font-display text-base font-bold tracking-tight text-muted-foreground tabular-nums">
         {rank}
       </span>
       <PlayerAvatar player={player} />
       <span className="truncate text-base font-semibold">{player.name}</span>
-      {lead ? (
-        <span className="text-[10px] font-bold tracking-widest text-primary uppercase">leader</span>
-      ) : null}
-      <div className="ml-auto flex items-baseline gap-2 font-display tracking-tight tabular-nums">
-        <span className="text-lg font-bold">{player.wins}</span>
-        <span className="text-base font-medium text-muted-foreground">{player.losses}</span>
-        <span
-          className={cn(
-            "w-9 text-right text-sm font-semibold",
-            player.pointDiff < 0 ? "text-destructive" : "text-primary",
-          )}
-        >
-          {fmtDiff(player.pointDiff)}
-        </span>
+      <div className="ml-auto text-right tabular-nums">
+        <div className="font-display text-2xl leading-none font-bold tracking-tight text-primary">{player.points}</div>
+        <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{record}</div>
       </div>
     </div>
   );
@@ -248,7 +296,7 @@ export function Scoreboard({
   const [activeTab, setActiveTab] = useState("round");
   const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
   const round = tournament.rounds[tournament.currentRoundIndex];
-  const pending = round?.matches.find((match) => match.result == null);
+  const isRoundEditable = tournament.currentRoundIndex === tournament.activeRoundIndex;
   const roomUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return `/t/${tournament.roomCode}`;
@@ -257,7 +305,10 @@ export function Scoreboard({
     return new URL(`/t/${encodeURIComponent(tournament.roomCode)}`, window.location.href).toString();
   }, [tournament.roomCode]);
   const sortedStandings = useMemo(
-    () => [...tournament.standings].sort((a, b) => b.wins - a.wins || b.pointDiff - a.pointDiff),
+    () =>
+      [...tournament.standings].sort(
+        (a, b) => b.points - a.points || b.wins - a.wins || b.ties - a.ties || b.pointDiff - a.pointDiff,
+      ),
     [tournament.standings],
   );
 
@@ -285,12 +336,6 @@ export function Scoreboard({
           {tournament.targetScore}
         </p>
       </div>
-
-      <RoundChips
-        current={tournament.currentRoundIndex}
-        onChange={onChangeRound}
-        total={tournament.totalRounds}
-      />
 
       <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setActiveTab} value={activeTab}>
         <TabsList
@@ -322,6 +367,7 @@ export function Scoreboard({
                 <CourtCard
                   key={match.id}
                   match={match}
+                  editable={isRoundEditable}
                   onEnterScore={onEnterScore}
                   targetScore={tournament.targetScore}
                 />
@@ -351,16 +397,15 @@ export function Scoreboard({
         </TabsContent>
       </Tabs>
 
-      <footer className="flex gap-2 border-t bg-background px-4 py-2 pb-3">
-        <Button
-          className="h-12 flex-1 text-base font-semibold"
-          disabled={!pending}
-          onClick={() => pending && onEnterScore(pending.id)}
-          size="lg"
-        >
-          {pending ? `Enter score · Court ${pending.courtNumber}` : "Round complete"}
-        </Button>
-        <Button className="size-12" onClick={onMore} size="icon" variant="secondary">
+      <footer className="flex items-center gap-2 border-t bg-background px-4 py-2 pb-3">
+        <RoundPagination
+          activeRound={tournament.activeRoundIndex}
+          className="min-w-0 flex-1 px-0 pb-0"
+          current={tournament.currentRoundIndex}
+          onChange={onChangeRound}
+          total={tournament.totalRounds}
+        />
+        <Button aria-label="More actions" className="size-10" onClick={onMore} size="icon" variant="outline">
           <MoreHorizontal className="size-5" />
         </Button>
       </footer>

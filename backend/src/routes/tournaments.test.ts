@@ -44,15 +44,15 @@ describe("tournament routes", () => {
     assert.equal(body.error, "validation_error");
   });
 
-  it("upserts a match result, calculates scores, and writes events", async () => {
+  it("upserts a match result, derives the winner, and writes events", async () => {
     const { app } = createTestApp({ roomCodes: ["ROOM42"] });
     await createTournament(app);
 
     const response = await app.request("/api/tournaments/room42/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "A",
-        losingScore: 18,
+        sideAScore: 13,
+        sideBScore: 8,
         expectedStateVersion: 1,
       }),
       headers: { "content-type": "application/json" },
@@ -70,9 +70,11 @@ describe("tournament routes", () => {
 
     assert.equal(response.status, 200);
     assert.equal(tournament.stateVersion, 2);
-    assert.equal(result.sideAScore, 21);
-    assert.equal(result.sideBScore, 18);
+    assert.equal(result.winningSide, "A");
+    assert.equal(result.sideAScore, 13);
+    assert.equal(result.sideBScore, 8);
     assert.equal(firstEntry.wins, 1);
+    assert.equal(firstEntry.pointsFor, 13);
 
     const eventsResponse = await app.request("/api/tournaments/ROOM42/events");
     const eventsBody = await readJsonObject(eventsResponse);
@@ -84,6 +86,72 @@ describe("tournament routes", () => {
     assert.equal(requireObject(events[1]).type, "match_result_upserted");
   });
 
+  it("rejects match scores that do not add up to the target score", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app, { targetScore: 24 });
+
+    const response = await app.request("/api/tournaments/room42/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 24,
+        sideBScore: 15,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "validation_error");
+  });
+
+  it("allows tied match scores", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app, { targetScore: 24 });
+
+    const response = await app.request("/api/tournaments/room42/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 12,
+        sideBScore: 12,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const tournament = requireObject((await readJsonObject(response)).tournament);
+    const state = requireObject(tournament.state);
+    const firstRound = requireObject(requireArray(state.rounds)[0]);
+    const firstMatch = requireObject(requireArray(firstRound.matches)[0]);
+    const result = requireObject(firstMatch.result);
+    const firstEntry = requireObject(requireArray(state.leaderboard)[0]);
+
+    assert.equal(response.status, 200);
+    assert.equal(result.winningSide, null);
+    assert.equal(result.sideAScore, 12);
+    assert.equal(result.sideBScore, 12);
+    assert.equal(firstEntry.wins, 0);
+    assert.equal(firstEntry.ties, 1);
+  });
+
+  it("rejects result updates for future rounds", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app);
+
+    const response = await app.request("/api/tournaments/ROOM42/matches/r2m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 409);
+    assert.equal(body.error, "cannot_edit_result_outside_current_round");
+  });
+
   it("rejects stale result updates", async () => {
     const { app } = createTestApp({ roomCodes: ["ROOM42"] });
     await createTournament(app);
@@ -92,8 +160,8 @@ describe("tournament routes", () => {
     const response = await app.request("/api/tournaments/ROOM42/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "B",
-        losingScore: 19,
+        sideAScore: 8,
+        sideBScore: 13,
         expectedStateVersion: 1,
       }),
       headers: { "content-type": "application/json" },
@@ -143,8 +211,8 @@ describe("tournament routes", () => {
     const editResponse = await app.request("/api/tournaments/ROOM42/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "A",
-        losingScore: 18,
+        sideAScore: 13,
+        sideBScore: 8,
         expectedStateVersion: 2,
       }),
       headers: { "content-type": "application/json" },
@@ -179,8 +247,8 @@ describe("tournament routes", () => {
     const response = await app.request("/api/tournaments/MEX123/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "A",
-        losingScore: 10,
+        sideAScore: 13,
+        sideBScore: 8,
         expectedStateVersion: 1,
       }),
       headers: { "content-type": "application/json" },
@@ -206,8 +274,8 @@ describe("tournament routes", () => {
     const firstResultResponse = await app.request("/api/tournaments/MEX123/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "A",
-        losingScore: 10,
+        sideAScore: 13,
+        sideBScore: 8,
         expectedStateVersion: 1,
       }),
       headers: { "content-type": "application/json" },
@@ -217,8 +285,8 @@ describe("tournament routes", () => {
     const editResponse = await app.request("/api/tournaments/MEX123/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "B",
-        losingScore: 11,
+        sideAScore: 8,
+        sideBScore: 13,
         expectedStateVersion: 2,
       }),
       headers: { "content-type": "application/json" },
@@ -226,7 +294,7 @@ describe("tournament routes", () => {
     const body = await readJsonObject(editResponse);
 
     assert.equal(editResponse.status, 409);
-    assert.equal(body.error, "cannot_edit_result_from_previous_round");
+    assert.equal(body.error, "cannot_edit_result_outside_current_round");
   });
 
   it("opens an SSE stream with the current tournament snapshot", async () => {
@@ -264,8 +332,8 @@ describe("tournament routes", () => {
     const resultResponse = await app.request("/api/tournaments/ROOM42/matches/r1m1/result", {
       method: "POST",
       body: JSON.stringify({
-        winningSide: "A",
-        losingScore: 18,
+        sideAScore: 13,
+        sideBScore: 8,
         expectedStateVersion: 1,
       }),
       headers: { "content-type": "application/json" },
@@ -309,8 +377,8 @@ async function upsertFirstResult(app: TestApp, expectedStateVersion: number) {
   const response = await app.request("/api/tournaments/ROOM42/matches/r1m1/result", {
     method: "POST",
     body: JSON.stringify({
-      winningSide: "A",
-      losingScore: 18,
+      sideAScore: 13,
+      sideBScore: 8,
       expectedStateVersion,
     }),
     headers: { "content-type": "application/json" },

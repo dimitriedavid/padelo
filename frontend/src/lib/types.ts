@@ -59,7 +59,7 @@ export type TournamentMatch = {
 export type MatchSide = "A" | "B";
 
 export type MatchResult = {
-  winningSide: MatchSide;
+  winningSide: MatchSide | null;
   sideAScore: number;
   sideBScore: number;
   enteredAt: string;
@@ -70,6 +70,7 @@ export type LeaderboardEntry = {
   playerId: string;
   played: number;
   wins: number;
+  ties: number;
   pointsFor: number;
   pointsAgainst: number;
   pointDiff: number;
@@ -85,8 +86,8 @@ export type CreateTournamentRequest = {
 };
 
 export type UpsertMatchResultRequest = {
-  winningSide: MatchSide;
-  losingScore: number;
+  sideAScore: number;
+  sideBScore: number;
   expectedStateVersion: number;
 };
 
@@ -113,4 +114,3 @@ export type RecentRoom = {
   lastOpenedAt: string;
   status: TournamentStatus;
 };
-

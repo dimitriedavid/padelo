@@ -1,4 +1,4 @@
-import type { MatchResult, MatchSide, TournamentMode, TournamentRoundStatus } from "@/lib/types";
+import type { MatchResult, TournamentMode, TournamentRoundStatus } from "@/lib/types";
 
 export type ScoreboardPlayerId = string;
 
@@ -11,7 +11,9 @@ export type ScoreboardPlayer = {
 
 export type ScoreboardStanding = ScoreboardPlayer & {
   played: number;
+  points: number;
   wins: number;
+  ties: number;
   losses: number;
   pointDiff: number;
 };
@@ -37,6 +39,7 @@ export type ScoreboardTournament = {
   targetScore: number;
   totalRounds: number;
   currentRoundIndex: number;
+  activeRoundIndex: number;
   courts: number;
   players: ScoreboardPlayer[];
   rounds: ScoreboardRound[];
@@ -51,7 +54,7 @@ export type ScoreboardLogEntry = {
 
 export type ResultSubmission = {
   matchId: string;
-  winningSide: MatchSide;
-  losingScore: number;
+  sideAScore: number;
+  sideBScore: number;
   expectedStateVersion: number;
 };

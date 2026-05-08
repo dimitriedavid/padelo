@@ -117,11 +117,15 @@ export class TournamentService {
     request: UpsertMatchResultRequest,
   ): Promise<TournamentEntity> {
     const tournament = await this.requireEditableTournament(roomCode, request.expectedStateVersion);
+    const targetScore = tournament.config.targetScore;
+    const totalScore = request.sideAScore + request.sideBScore;
 
-    if (request.losingScore >= tournament.config.targetScore) {
-      throw badRequest("validation_error", "Losing score must be lower than the target score.", {
-        field: "losingScore",
-        targetScore: tournament.config.targetScore,
+    if (totalScore !== targetScore) {
+      throw badRequest("validation_error", `Scores must add up to the target score of ${targetScore}.`, {
+        field: "score",
+        sideAScore: request.sideAScore,
+        sideBScore: request.sideBScore,
+        targetScore,
       });
     }
 
@@ -132,19 +136,20 @@ export class TournamentService {
       throw notFound("match_not_found", "Match not found.");
     }
 
-    if (matchRef.round.index < state.currentRoundIndex) {
+    if (matchRef.round.index !== state.currentRoundIndex) {
       throw conflict(
-        "cannot_edit_result_from_previous_round",
-        "Cannot edit a result from a previous round after the tournament has advanced.",
+        "cannot_edit_result_outside_current_round",
+        "Cannot edit a result outside the current round.",
       );
     }
 
     const now = this.now();
     const previousResult = matchRef.match.result;
     const result: MatchResult = {
-      winningSide: request.winningSide,
-      sideAScore: request.winningSide === "A" ? tournament.config.targetScore : request.losingScore,
-      sideBScore: request.winningSide === "B" ? tournament.config.targetScore : request.losingScore,
+      winningSide:
+        request.sideAScore === request.sideBScore ? null : request.sideAScore > request.sideBScore ? "A" : "B",
+      sideAScore: request.sideAScore,
+      sideBScore: request.sideBScore,
       enteredAt: previousResult?.enteredAt ?? now.toISOString(),
     };
 
@@ -192,10 +197,10 @@ export class TournamentService {
       return tournament;
     }
 
-    if (matchRef.round.index < state.currentRoundIndex) {
+    if (matchRef.round.index !== state.currentRoundIndex) {
       throw conflict(
-        "cannot_delete_result_from_previous_round",
-        "Cannot clear a result from a previous round after the tournament has advanced.",
+        "cannot_delete_result_outside_current_round",
+        "Cannot clear a result outside the current round.",
       );
     }
 

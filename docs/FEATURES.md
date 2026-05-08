@@ -147,16 +147,16 @@ This is a starting point. We can adjust as needed during development.
 `POST /matches/:matchId/result` creates or replaces a result.
 `DELETE /matches/:matchId/result` clears a result.
 
-Score/result input should be narrow. The client does not submit both team
-scores directly. It submits the winning side and the losing side's score.
-The winner score is the tournament target score from setup.
+Score/result input submits both side scores. The scores must add up to the
+tournament target score from setup. The server derives the winning side from the
+higher score, or stores `null` when the score is tied.
 
 Example:
 
 ```json
 {
-  "winningSide": "A",
-  "losingScore": 18,
+  "sideAScore": 13,
+  "sideBScore": 8,
   "expectedStateVersion": 7
 }
 ```
@@ -165,8 +165,9 @@ If the tournament target score is `21`, the stored result becomes:
 
 ```json
 {
-  "sideAScore": 21,
-  "sideBScore": 18
+  "winningSide": "A",
+  "sideAScore": 13,
+  "sideBScore": 8
 }
 ```
 
@@ -233,8 +234,8 @@ Example tournament state:
           "sideB": ["p3", "p4"],
           "result": {
             "winningSide": "A",
-            "sideAScore": 21,
-            "sideBScore": 18,
+            "sideAScore": 13,
+            "sideBScore": 8,
             "enteredAt": "2026-05-07T12:00:00.000Z"
           }
         }
@@ -246,9 +247,10 @@ Example tournament state:
       "playerId": "p1",
       "played": 1,
       "wins": 1,
-      "pointsFor": 21,
-      "pointsAgainst": 18,
-      "pointDiff": 3
+      "ties": 0,
+      "pointsFor": 13,
+      "pointsAgainst": 8,
+      "pointDiff": 5
     }
   ]
 }
@@ -262,8 +264,9 @@ rounds/matches are generated from tournament config
 fixed/auto rounds only for MVP; infinite rounds can be added later
 Americano fixed/auto rounds are generated when the tournament is created
 Mexicano starts with round 1 and appends the next round after each completed round
-results are editable while tournament is active
+results are editable only for the current active round while tournament is active
 leaderboard can be stored or recalculated from results
+leaderboard ranking is based on total points first, then record
 ```
 
 ---
