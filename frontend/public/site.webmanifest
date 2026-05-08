@@ -1,0 +1,18 @@
+{
+  "name": "Padelo",
+  "short_name": "Padelo",
+  "description": "Create Americano and Mexicano padel tournaments, share room codes, track live scores, and view leaderboards from any device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7faf8",
+  "theme_color": "#0f8b58",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

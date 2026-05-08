@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "../components/Button";
 import { PageShell } from "../components/PageShell";
+import { DEFAULT_SEO_DESCRIPTION, DEFAULT_SEO_TITLE, Seo } from "../components/Seo";
 import { clearRecentRooms, getRecentRooms } from "../lib/recentRooms";
 import { normalizeRoomInput } from "../lib/tournament";
 import type { RecentRoom } from "../lib/types";
@@ -43,6 +44,12 @@ export function HomePage() {
         </Link>
       }
     >
+      <Seo
+        description={DEFAULT_SEO_DESCRIPTION}
+        path="/"
+        structuredData="webApplication"
+        title={DEFAULT_SEO_TITLE}
+      />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="space-y-5">
           <div className="space-y-2">

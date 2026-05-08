@@ -9,6 +9,7 @@ import { MatchCard } from "../components/MatchCard";
 import { Message } from "../components/Message";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
+import { Seo } from "../components/Seo";
 import { Spinner } from "../components/Spinner";
 import { finishTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
@@ -29,6 +30,10 @@ export function TournamentRoomPage() {
   }
 
   const currentRound = tournament?.state.rounds[tournament.state.currentRoundIndex];
+  const pageTitle = tournament ? `${tournament.name} Scoreboard | Padelo` : "Padel Tournament Scoreboard | Padelo";
+  const pageDescription = tournament
+    ? `Live scoreboard for ${tournament.name}, with current round, match results, leaderboard, and tournament history.`
+    : "View a Padelo tournament room with live scores, match results, rounds, and leaderboard updates.";
 
   const copyLink = async () => {
     setCopied(false);
@@ -70,6 +75,13 @@ export function TournamentRoomPage() {
         </Button>
       }
     >
+      <Seo
+        description={pageDescription}
+        path={`/t/${roomCode}`}
+        robots="noindex,nofollow,noarchive"
+        structuredData={null}
+        title={pageTitle}
+      />
       {isLoading ? (
         <div className="grid min-h-[50vh] place-items-center text-court-700">
           <Spinner />
@@ -186,4 +198,3 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

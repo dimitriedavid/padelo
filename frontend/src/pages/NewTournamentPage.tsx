@@ -6,6 +6,7 @@ import { Button } from "../components/Button";
 import { Message } from "../components/Message";
 import { PageShell } from "../components/PageShell";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { Seo } from "../components/Seo";
 import { Spinner } from "../components/Spinner";
 import { createTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
@@ -78,6 +79,11 @@ export function NewTournamentPage() {
         </Link>
       }
     >
+      <Seo
+        description="Set up an Americano or Mexicano padel tournament with player names, courts, rounds, target score, and a shareable room code."
+        path="/new"
+        title="Create a Padel Tournament | Padelo"
+      />
       <form className="mx-auto max-w-3xl space-y-5" onSubmit={onSubmit}>
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-ink sm:text-3xl">New tournament</h1>
@@ -201,4 +207,3 @@ export function NewTournamentPage() {
     </PageShell>
   );
 }
-

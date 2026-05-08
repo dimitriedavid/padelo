@@ -7,6 +7,7 @@ import { Leaderboard } from "../components/Leaderboard";
 import { Message } from "../components/Message";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
+import { Seo } from "../components/Seo";
 import { Spinner } from "../components/Spinner";
 import { playAgain } from "../lib/api";
 import { errorMessage } from "../lib/errors";
@@ -26,6 +27,11 @@ export function FinishedTournamentPage() {
   if (!roomCode) {
     return <Navigate replace to="/" />;
   }
+
+  const pageTitle = tournament ? `${tournament.name} Results | Padelo` : "Padel Tournament Results | Padelo";
+  const pageDescription = tournament
+    ? `Final leaderboard and round results for ${tournament.name}.`
+    : "View final Padelo tournament results, leaderboard standings, and completed rounds.";
 
   const copyResults = async () => {
     if (!tournament) {
@@ -76,6 +82,13 @@ export function FinishedTournamentPage() {
         </Link>
       }
     >
+      <Seo
+        description={pageDescription}
+        path={`/t/${roomCode}/done`}
+        robots="noindex,nofollow,noarchive"
+        structuredData={null}
+        title={pageTitle}
+      />
       {isLoading ? (
         <div className="grid min-h-[50vh] place-items-center text-court-700">
           <Spinner />
@@ -126,4 +139,3 @@ export function FinishedTournamentPage() {
     </PageShell>
   );
 }
-
