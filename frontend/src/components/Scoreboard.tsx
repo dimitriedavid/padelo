@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
+import { AvatarStack, PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
 import type {
   ScoreboardLogEntry,
   ScoreboardMatch,
@@ -68,7 +68,7 @@ function RoundPagination({
   const canGoNext = current < total - 1;
 
   return (
-    <nav aria-label="Round pagination" className={cn("flex items-center justify-center gap-1", className)}>
+    <nav aria-label="Round pagination" className={cn("flex items-center justify-start gap-1", className)}>
       <Button
         aria-label="Previous round"
         className="size-10 shrink-0"
@@ -181,6 +181,7 @@ function TeamRow({
       >
         {side}
       </span>
+      <AvatarStack players={team} />
       <div className="min-w-0 flex-1 truncate text-base font-semibold">{players}</div>
       <div
         className={cn(
@@ -296,7 +297,13 @@ export function Scoreboard({
   const [activeTab, setActiveTab] = useState("round");
   const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
   const round = tournament.rounds[tournament.currentRoundIndex];
-  const isRoundEditable = tournament.currentRoundIndex === tournament.activeRoundIndex;
+  const activeRound = tournament.rounds[tournament.activeRoundIndex];
+  const currentRoundHasNoScores = activeRound?.matches.every((match) => match.result == null) ?? false;
+  const isLastCompletedRound =
+    tournament.currentRoundIndex === tournament.activeRoundIndex - 1 && round?.status === "complete";
+  const isRoundEditable =
+    tournament.currentRoundIndex === tournament.activeRoundIndex ||
+    (isLastCompletedRound && currentRoundHasNoScores);
   const roomUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return `/t/${tournament.roomCode}`;

@@ -27,11 +27,11 @@ export function RoundsList({ tournament }: RoundsListProps) {
                   <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">Court {match.courtNumber}</div>
                   <div className="grid gap-1 text-sm text-foreground">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate">{match.sideA.map((id) => playerName(tournament, id)).join(" / ")}</span>
+                      <span className="min-w-0 truncate">{match.sideA.map((id) => playerName(tournament, id)).join(" + ")}</span>
                       <span className="font-semibold">{match.result?.sideAScore ?? "-"}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate">{match.sideB.map((id) => playerName(tournament, id)).join(" / ")}</span>
+                      <span className="min-w-0 truncate">{match.sideB.map((id) => playerName(tournament, id)).join(" + ")}</span>
                       <span className="font-semibold">{match.result?.sideBScore ?? "-"}</span>
                     </div>
                   </div>

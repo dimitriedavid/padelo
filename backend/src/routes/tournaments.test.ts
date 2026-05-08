@@ -263,7 +263,7 @@ describe("tournament routes", () => {
     assert.equal(requireObject(rounds[1]).status, "active");
   });
 
-  it("blocks editing a previous Mexicano round after advancement", async () => {
+  it("allows editing the last completed Mexicano round after advancement", async () => {
     const { app } = createTestApp({ roomCodes: ["MEX123"] });
     await createTournament(app, {
       mode: "mexicano",
@@ -288,6 +288,59 @@ describe("tournament routes", () => {
         sideAScore: 8,
         sideBScore: 13,
         expectedStateVersion: 2,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const tournament = requireObject((await readJsonObject(editResponse)).tournament);
+    const state = requireObject(tournament.state);
+    const firstRound = requireObject(requireArray(state.rounds)[0]);
+    const firstMatch = requireObject(requireArray(firstRound.matches)[0]);
+    const result = requireObject(firstMatch.result);
+
+    assert.equal(editResponse.status, 200);
+    assert.equal(tournament.stateVersion, 3);
+    assert.equal(state.currentRoundIndex, 1);
+    assert.equal(result.winningSide, "B");
+    assert.equal(result.sideAScore, 8);
+    assert.equal(result.sideBScore, 13);
+  });
+
+  it("blocks editing rounds older than the last completed round", async () => {
+    const { app } = createTestApp({ roomCodes: ["MEX123"] });
+    await createTournament(app, {
+      mode: "mexicano",
+      players: ["A", "B", "C", "D"],
+      roundCount: { type: "fixed", value: 3 },
+    });
+
+    const firstResultResponse = await app.request("/api/tournaments/MEX123/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    assert.equal(firstResultResponse.status, 200);
+
+    const secondResultResponse = await app.request("/api/tournaments/MEX123/matches/r2m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 2,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    assert.equal(secondResultResponse.status, 200);
+
+    const editResponse = await app.request("/api/tournaments/MEX123/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 8,
+        sideBScore: 13,
+        expectedStateVersion: 3,
       }),
       headers: { "content-type": "application/json" },
     });

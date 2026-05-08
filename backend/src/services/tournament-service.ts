@@ -9,6 +9,7 @@ import type {
 import { generateRoomCode, normalizeRoomCode } from "./room-code.js";
 import {
   createInitialTournamentState,
+  isRoundComplete,
   maybeAppendNextMexicanoRound,
   normalizeTournamentState,
 } from "./scheduler.js";
@@ -136,10 +137,10 @@ export class TournamentService {
       throw notFound("match_not_found", "Match not found.");
     }
 
-    if (matchRef.round.index !== state.currentRoundIndex) {
+    if (!canEditMatchRound(state, matchRef.round.index)) {
       throw conflict(
         "cannot_edit_result_outside_current_round",
-        "Cannot edit a result outside the current round.",
+        "Cannot edit a result outside the current or last completed round.",
       );
     }
 
@@ -161,7 +162,7 @@ export class TournamentService {
 
     const updatedState = maybeAppendNextMexicanoRound(
       tournament.config,
-      normalizeTournamentState(state),
+      normalizeStateAfterMatchChange(tournament.config, state, matchRef.round.index),
     );
 
     return this.persistStateChange(tournament, {
@@ -197,10 +198,10 @@ export class TournamentService {
       return tournament;
     }
 
-    if (matchRef.round.index !== state.currentRoundIndex) {
+    if (!canEditMatchRound(state, matchRef.round.index)) {
       throw conflict(
         "cannot_delete_result_outside_current_round",
-        "Cannot clear a result outside the current round.",
+        "Cannot clear a result outside the current or last completed round.",
       );
     }
 
@@ -208,7 +209,7 @@ export class TournamentService {
     const previousResult = matchRef.match.result;
     matchRef.match.result = null;
 
-    const updatedState = normalizeTournamentState(state);
+    const updatedState = normalizeStateAfterMatchChange(tournament.config, state, matchRef.round.index);
 
     return this.persistStateChange(tournament, {
       state: updatedState,
@@ -359,6 +360,41 @@ function findMatch(
   }
 
   return null;
+}
+
+function canEditMatchRound(state: TournamentState, roundIndex: number): boolean {
+  if (roundIndex === state.currentRoundIndex) {
+    return true;
+  }
+
+  if (roundIndex !== state.currentRoundIndex - 1) {
+    return false;
+  }
+
+  const previousRound = state.rounds[roundIndex];
+  const currentRound = state.rounds[state.currentRoundIndex];
+
+  return Boolean(
+    previousRound &&
+      currentRound &&
+      isRoundComplete(previousRound) &&
+      currentRound.matches.every((match) => match.result === null),
+  );
+}
+
+function normalizeStateAfterMatchChange(
+  config: TournamentConfig,
+  state: TournamentState,
+  editedRoundIndex: number,
+): TournamentState {
+  if (config.mode !== "mexicano" || editedRoundIndex >= state.currentRoundIndex) {
+    return normalizeTournamentState(state);
+  }
+
+  return normalizeTournamentState({
+    ...state,
+    rounds: state.rounds.slice(0, editedRoundIndex + 1),
+  });
 }
 
 function cloneState(state: TournamentState): TournamentState {

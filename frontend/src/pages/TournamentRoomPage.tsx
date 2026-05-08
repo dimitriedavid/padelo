@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { assignPlayerAvatarColors } from "../components/PadeloBrand";
 import { Scoreboard } from "../components/Scoreboard";
 import { ScoreEntryDrawer } from "../components/ScoreEntryDrawer";
 import type {
@@ -274,7 +275,7 @@ export function TournamentRoomPage() {
 }
 
 function toScoreboardTournament(tournament: Tournament, currentRoundIndex: number): ScoreboardTournament {
-  const players = tournament.state.players.map(toScoreboardPlayer);
+  const players = assignPlayerAvatarColors(tournament.state.players.map(toScoreboardPlayer));
   const playerMap = new Map(players.map((player) => [player.id, player]));
   const getPlayer = (playerId: string) =>
     playerMap.get(playerId) ?? {

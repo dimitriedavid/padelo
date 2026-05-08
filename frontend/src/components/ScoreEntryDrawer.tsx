@@ -15,6 +15,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { AvatarStack } from "./PadeloBrand";
 import type { ResultSubmission, ScoreboardMatch } from "./scoreboard-types";
 
 type ScoreEntryDrawerProps = {
@@ -144,6 +145,8 @@ export function ScoreEntryDrawer({
                   >
                     {active ? <span className="size-2.5 rounded-full bg-accent-foreground" /> : null}
                   </span>
+
+                  <AvatarStack players={side.players} />
 
                   <div className="min-w-0 flex-1 leading-tight">
                     <div
