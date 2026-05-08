@@ -6,8 +6,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT:-8080}:80"
+    networks:
+      default:
+      cloudflare:
+        aliases:
+          - padelo-frontend
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
       interval: 10s
@@ -27,8 +30,11 @@ services:
       HOST: 0.0.0.0
       NODE_ENV: production
       PORT: 8123
-    expose:
-      - "8123"
+    networks:
+      default:
+      cloudflare:
+        aliases:
+          - padelo-backend
     healthcheck:
       test:
         [
@@ -70,3 +76,8 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  cloudflare:
+    external: true
+    name: cloudflared_cloudflare
