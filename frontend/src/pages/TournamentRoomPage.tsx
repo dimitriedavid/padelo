@@ -2,15 +2,17 @@ import { Check, Copy, Flag, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { Button } from "../components/Button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { EventLog } from "../components/EventLog";
 import { Leaderboard } from "../components/Leaderboard";
 import { MatchCard } from "../components/MatchCard";
-import { Message } from "../components/Message";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
 import { Seo } from "../components/Seo";
-import { Spinner } from "../components/Spinner";
 import { finishTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { displayMode, displayRoundCount, normalizeRoomInput } from "../lib/tournament";
@@ -70,7 +72,8 @@ export function TournamentRoomPage() {
   return (
     <PageShell
       actions={
-        <Button icon={copied ? <Check size={17} /> : <Copy size={17} />} onClick={copyLink} size="sm" variant="secondary">
+        <Button onClick={copyLink} size="sm" variant="secondary">
+          {copied ? <Check size={17} /> : <Copy size={17} />}
           <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
         </Button>
       }
@@ -83,24 +86,24 @@ export function TournamentRoomPage() {
         title={pageTitle}
       />
       {isLoading ? (
-        <div className="grid min-h-[50vh] place-items-center text-court-700">
+        <div className="grid min-h-[50vh] place-items-center text-primary">
           <Spinner />
         </div>
       ) : null}
 
       {!isLoading && error ? (
         <div className="mx-auto max-w-xl">
-          <Message tone="error">{error}</Message>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <div className="mt-4 flex gap-2">
-            <Button icon={<RefreshCw size={16} />} onClick={refresh} variant="secondary">
+            <Button onClick={refresh} variant="secondary">
+              <RefreshCw size={16} />
               Retry
             </Button>
-            <Link
-              className="inline-flex h-11 items-center justify-center rounded-md border border-line bg-white px-4 text-sm font-medium text-ink"
-              to="/"
-            >
-              Home
-            </Link>
+            <Button asChild variant="outline">
+              <Link to="/">Home</Link>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -110,17 +113,17 @@ export function TournamentRoomPage() {
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-court-600 px-2 py-1 text-xs font-semibold uppercase text-white">
+                <Badge className="uppercase">
                   {tournament.roomCode}
-                </span>
-                <span className="rounded bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-line">
+                </Badge>
+                <Badge variant="outline">
                   {displayMode(tournament.config.mode)}
-                </span>
-                <span className="rounded bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-line">
+                </Badge>
+                <Badge variant="outline">
                   {displayRoundCount(tournament)}
-                </span>
+                </Badge>
               </div>
-              <h1 className="text-2xl font-semibold text-ink sm:text-3xl">{tournament.name}</h1>
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{tournament.name}</h1>
               <div className="grid grid-cols-3 gap-2 sm:max-w-lg">
                 <Stat label="Players" value={String(tournament.state.players.length)} />
                 <Stat label="Courts" value={String(tournament.config.courtCount)} />
@@ -130,33 +133,34 @@ export function TournamentRoomPage() {
 
             <div className="flex items-start gap-2 lg:justify-end">
               {tournament.status === "finished" ? (
-                <Link
-                  className="inline-flex h-11 items-center justify-center rounded-md bg-court-600 px-4 text-sm font-medium text-white"
-                  to={`/t/${tournament.roomCode}/done`}
-                >
-                  Results
-                </Link>
+                <Button asChild className="h-11">
+                  <Link to={`/t/${tournament.roomCode}/done`}>Results</Link>
+                </Button>
               ) : (
-                <Button disabled={isFinishing} icon={<Flag size={17} />} onClick={finish} variant="danger">
-                  {isFinishing ? <Spinner /> : null}
+                <Button disabled={isFinishing} onClick={finish} variant="destructive">
+                  {isFinishing ? <Spinner /> : <Flag size={17} />}
                   Finish
                 </Button>
               )}
             </div>
           </section>
 
-          {actionError ? <Message tone="error">{actionError}</Message> : null}
+          {actionError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          ) : null}
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-5">
               <section className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold text-ink">
+                  <h2 className="text-base font-semibold text-foreground">
                     Round {(currentRound?.index ?? 0) + 1}
                   </h2>
-                  <span className="rounded bg-white px-2 py-1 text-xs font-medium capitalize text-slate-600 ring-1 ring-line">
+                  <Badge className="capitalize" variant="secondary">
                     {currentRound?.status ?? "pending"}
-                  </span>
+                  </Badge>
                 </div>
 
                 {currentRound ? (
@@ -172,7 +176,9 @@ export function TournamentRoomPage() {
                     ))}
                   </div>
                 ) : (
-                  <Message>No current round.</Message>
+                  <Alert>
+                    <AlertDescription>No current round.</AlertDescription>
+                  </Alert>
                 )}
               </section>
 
@@ -192,9 +198,11 @@ export function TournamentRoomPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
-    </div>
+    <Card>
+      <CardContent className="p-3">
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+      </CardContent>
+    </Card>
   );
 }

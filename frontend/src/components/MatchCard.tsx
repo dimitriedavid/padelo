@@ -1,14 +1,18 @@
 import { Save, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { deleteMatchResult, upsertMatchResult } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { playerName } from "../lib/tournament";
 import type { MatchSide, Tournament, TournamentMatch } from "../lib/types";
-import { Button } from "./Button";
-import { Message } from "./Message";
-import { SegmentedControl } from "./SegmentedControl";
-import { Spinner } from "./Spinner";
 
 type MatchCardProps = {
   tournament: Tournament;
@@ -76,78 +80,88 @@ export function MatchCard({ tournament, match, disabled = false, onTournamentCha
   };
 
   return (
-    <article className="panel p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-ink">Court {match.courtNumber}</div>
-          <div className="mt-1 text-xs text-slate-500">Match {match.id.toUpperCase()}</div>
-        </div>
-        {match.result ? (
-          <div className="rounded bg-court-50 px-2 py-1 text-sm font-semibold text-court-700">
-            {match.result.sideAScore}-{match.result.sideBScore}
-          </div>
-        ) : (
-          <div className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Open</div>
-        )}
-      </div>
-
-      <form className="space-y-4" onSubmit={save}>
-        <div className="grid gap-2">
-          <div className="rounded-md border border-line bg-white p-3">
-            <div className="text-xs font-medium uppercase text-slate-500">Side A</div>
-            <div className="mt-1 text-sm font-medium text-ink">{sideAPlayers}</div>
-          </div>
-          <div className="rounded-md border border-line bg-white p-3">
-            <div className="text-xs font-medium uppercase text-slate-500">Side B</div>
-            <div className="mt-1 text-sm font-medium text-ink">{sideBPlayers}</div>
-          </div>
-        </div>
-
-        <SegmentedControl
-          label="Winner"
-          onChange={setWinningSide}
-          options={[
-            { value: "A", label: "Side A" },
-            { value: "B", label: "Side B" },
-          ]}
-          value={winningSide}
-        />
-
-        <label className="space-y-2">
-          <span className="field-label">Losing score</span>
-          <input
-            className="field-input"
-            disabled={disabled}
-            max={tournament.state.targetScore - 1}
-            min={0}
-            onChange={(event) => setLosingScore(Number(event.target.value))}
-            type="number"
-            value={losingScore}
-          />
-        </label>
-
-        {error ? <Message tone="error">{error}</Message> : null}
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button className="w-full" disabled={disabled || isSaving || isDeleting} icon={<Save size={16} />} type="submit">
-            {isSaving ? <Spinner /> : null}
-            {match.result ? "Update" : "Save"}
-          </Button>
+    <Card>
+      <CardHeader>
+        <CardTitle>Court {match.courtNumber}</CardTitle>
+        <CardDescription>Match {match.id.toUpperCase()}</CardDescription>
+        <CardAction>
           {match.result ? (
-            <Button
-              className="w-full sm:w-auto"
-              disabled={disabled || isSaving || isDeleting}
-              icon={<Trash2 size={16} />}
-              onClick={clear}
-              variant="secondary"
-            >
-              {isDeleting ? <Spinner /> : null}
-              Clear
-            </Button>
+            <Badge variant="secondary">
+              {match.result.sideAScore}-{match.result.sideBScore}
+            </Badge>
+          ) : (
+            <Badge variant="outline">Open</Badge>
+          )}
+        </CardAction>
+      </CardHeader>
+
+      <CardContent>
+        <form className="space-y-4" onSubmit={save}>
+          <div className="grid gap-2">
+            <div className="rounded-md border bg-background p-3">
+              <div className="text-xs font-medium uppercase text-muted-foreground">Side A</div>
+              <div className="mt-1 text-sm font-medium text-foreground">{sideAPlayers}</div>
+            </div>
+            <div className="rounded-md border bg-background p-3">
+              <div className="text-xs font-medium uppercase text-muted-foreground">Side B</div>
+              <div className="mt-1 text-sm font-medium text-foreground">{sideBPlayers}</div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Winner</Label>
+            <Tabs onValueChange={(value) => setWinningSide(value as MatchSide)} value={winningSide}>
+              <TabsList className="grid h-11 w-full grid-cols-2">
+                <TabsTrigger disabled={disabled} value="A">
+                  Side A
+                </TabsTrigger>
+                <TabsTrigger disabled={disabled} value="B">
+                  Side B
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`${match.id}-losing-score`}>Losing score</Label>
+            <Input
+              className="h-11"
+              disabled={disabled}
+              id={`${match.id}-losing-score`}
+              max={tournament.state.targetScore - 1}
+              min={0}
+              onChange={(event) => setLosingScore(Number(event.target.value))}
+              type="number"
+              value={losingScore}
+            />
+          </div>
+
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           ) : null}
-        </div>
-      </form>
-    </article>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button className="h-11 w-full" disabled={disabled || isSaving || isDeleting} type="submit">
+              {isSaving ? <Spinner /> : <Save size={16} />}
+              {match.result ? "Update" : "Save"}
+            </Button>
+            {match.result ? (
+              <Button
+                className="h-11 w-full sm:w-auto"
+                disabled={disabled || isSaving || isDeleting}
+                onClick={clear}
+                type="button"
+                variant="secondary"
+              >
+                {isDeleting ? <Spinner /> : <Trash2 size={16} />}
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
-

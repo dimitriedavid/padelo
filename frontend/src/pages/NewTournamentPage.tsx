@@ -2,12 +2,15 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Button } from "../components/Button";
-import { Message } from "../components/Message";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageShell } from "../components/PageShell";
-import { SegmentedControl } from "../components/SegmentedControl";
 import { Seo } from "../components/Seo";
-import { Spinner } from "../components/Spinner";
 import { createTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
@@ -70,13 +73,11 @@ export function NewTournamentPage() {
   return (
     <PageShell
       actions={
-        <Link
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-ink transition hover:bg-court-50"
-          title="Back"
-          to="/"
-        >
-          <ArrowLeft size={19} />
-        </Link>
+        <Button asChild size="icon" variant="ghost">
+          <Link title="Back" to="/">
+            <ArrowLeft size={19} />
+          </Link>
+        </Button>
       }
     >
       <Seo
@@ -86,119 +87,133 @@ export function NewTournamentPage() {
       />
       <form className="mx-auto max-w-3xl space-y-5" onSubmit={onSubmit}>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-ink sm:text-3xl">New tournament</h1>
-          <p className="text-sm leading-6 text-slate-600">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">New tournament</h1>
+          <p className="text-sm leading-6 text-muted-foreground">
             Room access is controlled by the generated room code.
           </p>
         </div>
 
-        {error ? <Message tone="error">{error}</Message> : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
-        <section className="panel space-y-4 p-4 sm:p-5">
-          <label className="space-y-2">
-            <span className="field-label">Tournament name</span>
-            <input
-              className="field-input"
-              maxLength={80}
-              onChange={(event) => setName(event.target.value)}
-              value={name}
-            />
-          </label>
-
-          <SegmentedControl
-            label="Mode"
-            onChange={setMode}
-            options={[
-              { value: "americano", label: "Americano" },
-              { value: "mexicano", label: "Mexicano" },
-            ]}
-            value={mode}
-          />
-        </section>
-
-        <section className="panel space-y-4 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-ink">Players</h2>
-            <Button
-              icon={<Plus size={16} />}
-              onClick={() => setPlayers((current) => [...current, ""])}
-              size="sm"
-              variant="secondary"
-            >
-              Add
-            </Button>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {players.map((player, index) => (
-              <div className="flex gap-2" key={index}>
-                <input
-                  className="field-input"
-                  maxLength={60}
-                  onChange={(event) => updatePlayer(index, event.target.value)}
-                  placeholder={`Player ${index + 1}`}
-                  value={player}
-                />
-                <Button
-                  aria-label={`Remove player ${index + 1}`}
-                  disabled={players.length <= 4}
-                  icon={<Trash2 size={16} />}
-                  onClick={() => removePlayer(index)}
-                  size="icon"
-                  variant="ghost"
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel grid gap-4 p-4 sm:grid-cols-3 sm:p-5">
-          <label className="space-y-2">
-            <span className="field-label">Courts</span>
-            <input
-              className="field-input"
-              min={1}
-              onChange={(event) => setCourtCount(Number(event.target.value))}
-              type="number"
-              value={courtCount}
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="field-label">Target score</span>
-            <input
-              className="field-input"
-              min={1}
-              onChange={(event) => setTargetScore(Number(event.target.value))}
-              type="number"
-              value={targetScore}
-            />
-          </label>
-
-          <div className="space-y-2">
-            <SegmentedControl
-              label="Rounds"
-              onChange={setRoundMode}
-              options={[
-                { value: "fixed", label: "Fixed" },
-                { value: "auto", label: "Auto" },
-              ]}
-              value={roundMode}
-            />
-            {roundMode === "fixed" ? (
-              <input
-                className="field-input"
-                min={1}
-                onChange={(event) => setRoundValue(Number(event.target.value))}
-                type="number"
-                value={roundValue}
+        <Card>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="tournament-name">Tournament name</Label>
+              <Input
+                className="h-11"
+                id="tournament-name"
+                maxLength={80}
+                onChange={(event) => setName(event.target.value)}
+                value={name}
               />
-            ) : null}
-          </div>
-        </section>
+            </div>
 
-        <div className="sticky bottom-0 -mx-4 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
-          <Button className="w-full sm:w-auto" disabled={!canSubmit} type="submit">
+            <div className="space-y-2">
+              <Label>Mode</Label>
+              <Tabs onValueChange={(value) => setMode(value as TournamentMode)} value={mode}>
+                <TabsList className="grid h-11 w-full grid-cols-2">
+                  <TabsTrigger value="americano">Americano</TabsTrigger>
+                  <TabsTrigger value="mexicano">Mexicano</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-foreground">Players</h2>
+              <Button
+                onClick={() => setPlayers((current) => [...current, ""])}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <Plus size={16} />
+                Add
+              </Button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {players.map((player, index) => (
+                <div className="flex gap-2" key={index}>
+                  <Input
+                    className="h-11"
+                    maxLength={60}
+                    onChange={(event) => updatePlayer(index, event.target.value)}
+                    placeholder={`Player ${index + 1}`}
+                    value={player}
+                  />
+                  <Button
+                    aria-label={`Remove player ${index + 1}`}
+                    disabled={players.length <= 4}
+                    onClick={() => removePlayer(index)}
+                    size="icon-lg"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="court-count">Courts</Label>
+              <Input
+                className="h-11"
+                id="court-count"
+                min={1}
+                onChange={(event) => setCourtCount(Number(event.target.value))}
+                type="number"
+                value={courtCount}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="target-score">Target score</Label>
+              <Input
+                className="h-11"
+                id="target-score"
+                min={1}
+                onChange={(event) => setTargetScore(Number(event.target.value))}
+                type="number"
+                value={targetScore}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Rounds</Label>
+              <Tabs onValueChange={(value) => setRoundMode(value as RoundMode)} value={roundMode}>
+                <TabsList className="grid h-11 w-full grid-cols-2">
+                  <TabsTrigger value="fixed">Fixed</TabsTrigger>
+                  <TabsTrigger value="auto">Auto</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {roundMode === "fixed" ? (
+                <Input
+                  className="h-11"
+                  min={1}
+                  onChange={(event) => setRoundValue(Number(event.target.value))}
+                  type="number"
+                  value={roundValue}
+                />
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
+          <Button className="h-11 w-full sm:w-auto" disabled={!canSubmit} type="submit">
             {isSubmitting ? <Spinner /> : null}
             Create room
           </Button>

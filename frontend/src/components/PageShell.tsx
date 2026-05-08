@@ -10,10 +10,10 @@ type PageShellProps = {
 export function PageShell({ children, actions }: PageShellProps) {
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-line bg-white/92 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b bg-card/92 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
-          <Link className="flex min-w-0 items-center gap-2 text-ink" to="/">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-court-600 text-sm font-bold text-white">
+          <Link className="flex min-w-0 items-center gap-2 text-foreground" to="/">
+            <span className="grid h-9 w-9 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
               P
             </span>
             <span className="truncate text-lg font-semibold">Padelo</span>
@@ -25,4 +25,3 @@ export function PageShell({ children, actions }: PageShellProps) {
     </div>
   );
 }
-

@@ -2,13 +2,14 @@ import { ArrowLeft, Check, Copy, Play } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { Button } from "../components/Button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Leaderboard } from "../components/Leaderboard";
-import { Message } from "../components/Message";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
 import { Seo } from "../components/Seo";
-import { Spinner } from "../components/Spinner";
 import { playAgain } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
@@ -73,13 +74,11 @@ export function FinishedTournamentPage() {
   return (
     <PageShell
       actions={
-        <Link
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-ink transition hover:bg-court-50"
-          title="Back to room"
-          to={`/t/${roomCode}`}
-        >
-          <ArrowLeft size={19} />
-        </Link>
+        <Button asChild size="icon" variant="ghost">
+          <Link title="Back to room" to={`/t/${roomCode}`}>
+            <ArrowLeft size={19} />
+          </Link>
+        </Button>
       }
     >
       <Seo
@@ -90,14 +89,16 @@ export function FinishedTournamentPage() {
         title={pageTitle}
       />
       {isLoading ? (
-        <div className="grid min-h-[50vh] place-items-center text-court-700">
+        <div className="grid min-h-[50vh] place-items-center text-primary">
           <Spinner />
         </div>
       ) : null}
 
       {!isLoading && error ? (
         <div className="mx-auto max-w-xl">
-          <Message tone="error">{error}</Message>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       ) : null}
 
@@ -105,27 +106,32 @@ export function FinishedTournamentPage() {
         <div className="space-y-5">
           <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-court-600 px-2 py-1 text-xs font-semibold uppercase text-white">
+              <Badge className="uppercase">
                 {tournament.roomCode}
-              </span>
-              <span className="rounded bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-line">
+              </Badge>
+              <Badge variant="outline">
                 {displayMode(tournament.config.mode)}
-              </span>
-              <span className="rounded bg-white px-2 py-1 text-xs font-medium capitalize text-slate-600 ring-1 ring-line">
+              </Badge>
+              <Badge className="capitalize" variant="secondary">
                 {tournament.status}
-              </span>
+              </Badge>
             </div>
-            <h1 className="text-2xl font-semibold text-ink sm:text-3xl">{tournament.name}</h1>
+            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{tournament.name}</h1>
           </section>
 
-          {actionError ? <Message tone="error">{actionError}</Message> : null}
+          {actionError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          ) : null}
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button icon={copied ? <Check size={17} /> : <Copy size={17} />} onClick={copyResults} variant="secondary">
+            <Button onClick={copyResults} variant="secondary">
+              {copied ? <Check size={17} /> : <Copy size={17} />}
               {copied ? "Copied" : "Copy results"}
             </Button>
-            <Button disabled={isPlayingAgain} icon={<Play size={17} />} onClick={onPlayAgain}>
-              {isPlayingAgain ? <Spinner /> : null}
+            <Button disabled={isPlayingAgain} onClick={onPlayAgain}>
+              {isPlayingAgain ? <Spinner /> : <Play size={17} />}
               Play again
             </Button>
           </div>

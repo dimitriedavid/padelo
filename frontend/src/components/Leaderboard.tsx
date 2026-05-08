@@ -1,3 +1,5 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import type { Tournament } from "../lib/types";
 import { playerName, sortLeaderboard } from "../lib/tournament";
 
@@ -9,35 +11,37 @@ export function Leaderboard({ tournament }: LeaderboardProps) {
   const entries = sortLeaderboard(tournament);
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="border-b border-line px-4 py-3">
-        <h2 className="text-base font-semibold text-ink">Leaderboard</h2>
-      </div>
-      <div className="divide-y divide-line">
+    <Card>
+      <CardHeader>
+        <CardTitle>Leaderboard</CardTitle>
+      </CardHeader>
+      <CardContent className="px-0">
         {entries.map((entry, index) => (
-          <div
-            className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3"
-            key={entry.playerId}
-          >
-            <div className="grid h-7 w-7 place-items-center rounded bg-court-50 text-sm font-semibold text-court-700">
-              {index + 1}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate font-medium text-ink">{playerName(tournament, entry.playerId)}</div>
-              <div className="mt-0.5 text-xs text-slate-500">
-                {entry.played} played · {entry.wins} wins
+          <div key={entry.playerId}>
+            {index > 0 ? <Separator /> : null}
+            <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+              <div className="grid h-7 w-7 place-items-center rounded bg-secondary text-sm font-semibold text-primary">
+                {index + 1}
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-semibold text-ink">{entry.pointDiff >= 0 ? "+" : ""}{entry.pointDiff}</div>
-              <div className="text-xs text-slate-500">
-                {entry.pointsFor}-{entry.pointsAgainst}
+              <div className="min-w-0">
+                <div className="truncate font-medium text-foreground">{playerName(tournament, entry.playerId)}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {entry.played} played · {entry.wins} wins
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold text-foreground">
+                  {entry.pointDiff >= 0 ? "+" : ""}
+                  {entry.pointDiff}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {entry.pointsFor}-{entry.pointsAgainst}
+                </div>
               </div>
             </div>
           </div>
         ))}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
-

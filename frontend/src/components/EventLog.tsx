@@ -1,13 +1,15 @@
 import { Clock } from "lucide-react";
 import { useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { getTournamentEvents } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { formatDateTime } from "../lib/tournament";
 import type { TournamentEvent } from "../lib/types";
-import { Button } from "./Button";
-import { Message } from "./Message";
-import { Spinner } from "./Spinner";
 
 type EventLogProps = {
   roomCode: string;
@@ -32,31 +34,38 @@ export function EventLog({ roomCode }: EventLogProps) {
   };
 
   return (
-    <section className="panel p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-ink">Logs</h2>
-        <Button icon={isLoading ? <Spinner /> : <Clock size={16} />} onClick={load} size="sm" variant="secondary">
+    <Card>
+      <CardHeader className="grid grid-cols-[1fr_auto] items-center">
+        <CardTitle>Logs</CardTitle>
+        <Button onClick={load} size="sm" variant="secondary">
+          {isLoading ? <Spinner /> : <Clock size={16} />}
           Load
         </Button>
-      </div>
+      </CardHeader>
 
       {error ? (
-        <div className="mt-3">
-          <Message tone="error">{error}</Message>
-        </div>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </CardContent>
       ) : null}
 
       {events ? (
-        <div className="mt-3 divide-y divide-line">
-          {events.map((event) => (
-            <div className="py-3 text-sm" key={event.id}>
-              <div className="font-medium text-ink">{event.type.replaceAll("_", " ")}</div>
-              <div className="mt-1 text-xs text-slate-500">{formatDateTime(event.createdAt)}</div>
-            </div>
-          ))}
-        </div>
+        <CardContent className="pt-0">
+          <div>
+            {events.map((event) => (
+              <div key={event.id}>
+                <Separator />
+                <div className="py-3 text-sm">
+                  <div className="font-medium text-foreground">{event.type.replaceAll("_", " ")}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(event.createdAt)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
       ) : null}
-    </section>
+    </Card>
   );
 }
-
