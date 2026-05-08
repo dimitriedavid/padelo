@@ -23,12 +23,28 @@ docker compose run --rm migrate
 The frontend container serves the built React app with nginx and proxies `/api`
 to the backend service.
 
-## Development stack
+## Development database
 
-Start Vite and the Hono backend with bind mounts:
+Start Postgres only:
 
 ```sh
-docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Run the backend manually from `backend/`:
+
+```sh
+pnpm install
+cp .env.example .env
+pnpm db:migrate
+pnpm run dev
+```
+
+Run the frontend manually from `frontend/`:
+
+```sh
+pnpm install
+pnpm dev
 ```
 
 Open:
@@ -37,7 +53,11 @@ Open:
 http://localhost:5173
 ```
 
-The development frontend proxies `/api` to the backend on `localhost:8123`.
+The Vite development server proxies `/api` to the backend on `localhost:8123`
+by default.
+
+If you set custom `POSTGRES_*` values in the root `.env`, update
+`backend/.env` so `DATABASE_URL` uses the same credentials.
 
 ## Environment
 
