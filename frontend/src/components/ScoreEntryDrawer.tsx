@@ -1,4 +1,4 @@
-// Padelo score entry sheet. Submits the narrow API payload:
+// Padelo score entry drawer. Submits the narrow API payload:
 // { winningSide, losingScore, expectedStateVersion }.
 
 import { Minus, Plus } from "lucide-react";
@@ -7,19 +7,19 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { AvatarStack } from "./PadeloBrand";
 import type { ResultSubmission, ScoreboardMatch } from "./scoreboard-types";
 import type { MatchSide } from "@/lib/types";
 
-type ScoreEntrySheetProps = {
+type ScoreEntryDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   match: ScoreboardMatch | null;
@@ -32,7 +32,7 @@ type ScoreEntrySheetProps = {
 
 const QUICK_PICKS = [0, 6, 12, 15, 18, 19, 20];
 
-export function ScoreEntrySheet({
+export function ScoreEntryDrawer({
   open,
   onOpenChange,
   match,
@@ -41,7 +41,7 @@ export function ScoreEntrySheet({
   expectedStateVersion,
   error,
   onSubmit,
-}: ScoreEntrySheetProps) {
+}: ScoreEntryDrawerProps) {
   const [winner, setWinner] = useState<MatchSide>("A");
   const [losing, setLosing] = useState(targetScore - 3);
   const [submitting, setSubmitting] = useState(false);
@@ -90,26 +90,20 @@ export function ScoreEntrySheet({
   };
 
   return (
-    <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetContent
-        className="max-h-[92dvh] rounded-t-3xl border-0 p-0"
-        showCloseButton={false}
-        side="bottom"
-      >
-        <div className="mx-auto mt-2 mb-1 h-1 w-9 rounded-full bg-border" />
-
+    <Drawer onOpenChange={onOpenChange} open={open}>
+      <DrawerContent className="max-h-[92dvh] border-0 p-0 sm:max-w-md">
         <div className="flex flex-col gap-4 px-5 pt-1 pb-5">
-          <SheetHeader className="space-y-1 p-0 text-left">
+          <DrawerHeader className="space-y-1 p-0 text-left">
             <p className="text-[11px] tracking-widest text-muted-foreground uppercase">
               Court {match.courtNumber} · Round {roundIndex + 1}
             </p>
-            <SheetTitle className="font-display text-2xl font-semibold -tracking-[0.025em]">
+            <DrawerTitle className="font-display text-2xl font-semibold -tracking-[0.025em]">
               Who won?
-            </SheetTitle>
-            <SheetDescription className="text-xs">
+            </DrawerTitle>
+            <DrawerDescription className="text-xs">
               Target {targetScore}. Tap the winning side, then enter the losing score.
-            </SheetDescription>
-          </SheetHeader>
+            </DrawerDescription>
+          </DrawerHeader>
 
           {error ? (
             <Alert variant="destructive">
@@ -218,7 +212,7 @@ export function ScoreEntrySheet({
             </div>
           </div>
 
-          <SheetFooter className="p-0 pt-1">
+          <DrawerFooter className="p-0 pt-1">
             <Button
               className="h-14 w-full rounded-2xl text-base font-semibold"
               disabled={submitting}
@@ -227,9 +221,9 @@ export function ScoreEntrySheet({
             >
               {submitting ? "Saving..." : `Save · ${summary}`}
             </Button>
-          </SheetFooter>
+          </DrawerFooter>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

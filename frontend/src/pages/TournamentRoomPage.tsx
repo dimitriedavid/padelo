@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Scoreboard } from "../components/Scoreboard";
-import { ScoreEntrySheet } from "../components/ScoreEntrySheet";
+import { ScoreEntryDrawer } from "../components/ScoreEntryDrawer";
 import type {
   ResultSubmission,
   ScoreboardLogEntry,
@@ -197,7 +197,7 @@ export function TournamentRoomPage() {
             tournament={scoreboardTournament}
             upNext={upNextText(scoreboardTournament)}
           />
-          <ScoreEntrySheet
+          <ScoreEntryDrawer
             error={actionError}
             expectedStateVersion={tournament?.stateVersion ?? 0}
             match={openMatch}
