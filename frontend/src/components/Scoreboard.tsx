@@ -1,7 +1,7 @@
 // Padelo scoreboard screen — mobile-first, shadcn/ui + Tailwind.
 
 import { ChevronLeft, MoreHorizontal, Share2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -234,6 +234,7 @@ export function Scoreboard({
   onChangeRound,
   onEnterScore,
 }: ScoreboardProps) {
+  const [activeTab, setActiveTab] = useState("round");
   const round = tournament.rounds[tournament.currentRoundIndex];
   const pending = round?.matches.find((match) => match.result == null);
   const sortedStandings = useMemo(
@@ -272,8 +273,11 @@ export function Scoreboard({
         total={tournament.totalRounds}
       />
 
-      <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="round">
-        <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0 px-3">
+      <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setActiveTab} value={activeTab}>
+        <TabsList
+          className="h-10 w-full justify-start gap-5 overflow-x-auto rounded-none border-b bg-transparent p-0 px-4"
+          variant="line"
+        >
           {[
             { id: "round", label: "Round" },
             { id: "standings", label: "Standings" },
@@ -281,10 +285,8 @@ export function Scoreboard({
           ].map(({ id, label }) => (
             <TabsTrigger
               className={cn(
-                "rounded-none border-b-2 border-transparent",
-                "data-active:border-primary data-active:bg-transparent data-active:text-primary",
-                "px-3 py-2.5 text-[13px] font-semibold",
-                "data-active:shadow-none",
+                "h-10 flex-none rounded-none border-0! bg-transparent px-0 py-0 text-[13px] font-semibold shadow-none!",
+                "text-muted-foreground after:hidden data-active:text-foreground",
               )}
               key={id}
               value={id}
