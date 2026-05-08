@@ -1,14 +1,14 @@
 // Padelo scoreboard screen — mobile-first, shadcn/ui + Tailwind.
 
 import { ChevronLeft, MoreHorizontal, Share2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { AvatarStack, PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
+import { PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
 import type {
   ScoreboardLogEntry,
   ScoreboardMatch,
@@ -20,7 +20,6 @@ import type { MatchSide } from "@/lib/types";
 type ScoreboardProps = {
   tournament: ScoreboardTournament;
   log?: ScoreboardLogEntry[];
-  upNext?: string | undefined;
   onBack?: () => void;
   onShare?: () => void;
   onMore?: () => void;
@@ -39,8 +38,8 @@ function fmtDiff(value: number) {
 function RoomCodeChip({ code }: { code: string }) {
   return (
     <Badge className="gap-1 rounded-md px-2 py-1 font-mono text-xs uppercase" variant="secondary">
-      <span className="text-[9px] tracking-widest text-muted-foreground">Room</span>
-      <span className="font-display font-bold tracking-tight text-primary">{code}</span>
+      <span className="text-xs tracking-widest text-muted-foreground">Room</span>
+      <span className="font-display text-sm font-bold tracking-tight text-primary">{code}</span>
     </Badge>
   );
 }
@@ -55,16 +54,16 @@ function RoundChips({
   onChange?: ((index: number) => void) | undefined;
 }) {
   return (
-    <div className="flex items-center gap-2 px-4 pb-3">
-      <div className="flex flex-1 gap-1 overflow-x-auto">
+    <div className="flex items-center gap-3 px-4 pb-3">
+      <div className="flex flex-1 gap-2 overflow-x-auto">
         {Array.from({ length: total }, (_, index) => {
           const state = index === current ? "current" : index < current ? "done" : "future";
 
           return (
-            <button
+            <Button
               className={cn(
-                "grid size-7 shrink-0 place-items-center rounded-md",
-                "font-display text-sm font-semibold tracking-tight tabular-nums",
+                "size-11 shrink-0",
+                "font-display text-lg font-semibold tracking-tight tabular-nums",
                 "transition-colors",
                 state === "current" && "bg-primary text-primary-foreground",
                 state === "done" && "bg-accent text-accent-foreground",
@@ -72,16 +71,18 @@ function RoundChips({
               )}
               key={index}
               onClick={() => onChange?.(index)}
+              size="icon"
               type="button"
+              variant="ghost"
             >
               {index + 1}
-            </button>
+            </Button>
           );
         })}
       </div>
       <div className="font-display tracking-tight text-primary tabular-nums">
-        <span className="text-lg font-bold">R{current + 1}</span>
-        <span className="text-xs text-muted-foreground">/{total}</span>
+        <span className="text-2xl font-bold">R{current + 1}</span>
+        <span className="text-sm text-muted-foreground">/{total}</span>
       </div>
     </div>
   );
@@ -100,29 +101,24 @@ function TeamRow({
   const score =
     match.result == null ? null : side === "A" ? match.result.sideAScore : match.result.sideBScore;
   const win = won(match, side);
+  const players = `${team[0].name} & ${team[1].name}`;
 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5",
+        "flex items-center gap-3 rounded-xl px-3 py-2",
         win ? "bg-accent-foreground text-accent" : "bg-muted/40",
       )}
     >
       <span
         className={cn(
-          "w-3 text-[10px] font-semibold tracking-widest uppercase",
+          "w-4 text-xs font-semibold tracking-widest uppercase",
           win ? "opacity-70" : "text-muted-foreground",
         )}
       >
         {side}
       </span>
-      <AvatarStack players={team} />
-      <div className="min-w-0 flex-1 leading-tight">
-        <div className="truncate text-[13px] font-semibold">{team[0].name}</div>
-        <div className={cn("truncate text-[13px] font-semibold", win ? "opacity-80" : "text-muted-foreground")}>
-          {team[1].name}
-        </div>
-      </div>
+      <div className="min-w-0 flex-1 truncate text-base font-semibold">{players}</div>
       <div
         className={cn(
           "font-display text-[38px] leading-none font-bold -tracking-[0.04em] tabular-nums",
@@ -145,27 +141,35 @@ function CourtCard({
   onEnterScore: (matchId: string) => void;
 }) {
   const pending = match.result == null;
+  const openScoreEntry = () => onEnterScore(match.id);
+  const onCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openScoreEntry();
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card p-3 shadow-sm">
+    <div
+      aria-label={`${pending ? "Enter" : "Edit"} score for court ${match.courtNumber}`}
+      className="flex cursor-pointer touch-manipulation flex-col gap-2.5 rounded-2xl border bg-card p-3 shadow-sm transition-colors hover:bg-card/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none active:bg-muted/60"
+      onClick={openScoreEntry}
+      onKeyDown={onCardKeyDown}
+      role="button"
+      tabIndex={0}
+    >
       <div className="flex items-center gap-2 px-1">
-        <Badge className="gap-1.5 rounded-md font-medium" variant="outline">
-          <span className="size-2 rounded-[1px] border-2 border-primary" />
+        <Badge className="h-8 rounded-md bg-accent px-2.5 py-1 text-sm font-semibold text-accent-foreground">
           Court {match.courtNumber}
         </Badge>
         {pending ? (
-          <span className="text-[11px] font-semibold text-destructive">awaiting result</span>
+          <span className="text-sm font-semibold text-destructive">awaiting result</span>
         ) : (
-          <span className="text-[11px] text-muted-foreground">final</span>
+          <span className="text-sm text-muted-foreground">final</span>
         )}
-        <Button
-          className="ml-auto h-auto p-0 text-primary"
-          onClick={() => onEnterScore(match.id)}
-          size="sm"
-          variant="link"
-        >
+        <span className="ml-auto flex h-10 shrink-0 items-center px-3 text-base font-semibold text-primary">
           {pending ? "Enter >" : "Edit"}
-        </Button>
+        </span>
       </div>
       <TeamRow match={match} side="A" targetScore={targetScore} />
       <TeamRow match={match} side="B" targetScore={targetScore} />
@@ -192,16 +196,16 @@ function LeaderboardRow({ player, rank }: { player: ScoreboardStanding; rank: nu
         {rank}
       </span>
       <PlayerAvatar player={player} />
-      <span className="truncate text-sm font-semibold">{player.name}</span>
+      <span className="truncate text-base font-semibold">{player.name}</span>
       {lead ? (
-        <span className="text-[9px] font-bold tracking-widest text-primary uppercase">leader</span>
+        <span className="text-[10px] font-bold tracking-widest text-primary uppercase">leader</span>
       ) : null}
       <div className="ml-auto flex items-baseline gap-2 font-display tracking-tight tabular-nums">
-        <span className="text-[15px] font-bold">{player.wins}</span>
-        <span className="text-[13px] font-medium text-muted-foreground">{player.losses}</span>
+        <span className="text-lg font-bold">{player.wins}</span>
+        <span className="text-base font-medium text-muted-foreground">{player.losses}</span>
         <span
           className={cn(
-            "w-8 text-right text-xs font-semibold",
+            "w-9 text-right text-sm font-semibold",
             player.pointDiff < 0 ? "text-destructive" : "text-primary",
           )}
         >
@@ -214,11 +218,11 @@ function LeaderboardRow({ player, rank }: { player: ScoreboardStanding; rank: nu
 
 function LogEntry({ ago, text, score }: ScoreboardLogEntry) {
   return (
-    <div className="flex gap-3 rounded-lg border bg-card px-3 py-2">
-      <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{ago}</span>
-      <span className="flex-1 text-xs">{text}</span>
+    <div className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
+      <span className="w-18 shrink-0 text-sm text-muted-foreground">{ago}</span>
+      <span className="flex-1 text-sm">{text}</span>
       {score ? (
-        <span className="font-display font-bold text-primary tabular-nums">{score}</span>
+        <span className="font-display text-sm font-bold text-primary tabular-nums">{score}</span>
       ) : null}
     </div>
   );
@@ -227,7 +231,6 @@ function LogEntry({ ago, text, score }: ScoreboardLogEntry) {
 export function Scoreboard({
   tournament,
   log = [],
-  upNext,
   onBack,
   onShare,
   onMore,
@@ -244,24 +247,24 @@ export function Scoreboard({
 
   return (
     <div className="flex h-dvh w-full flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b px-3 py-2">
-        <Button onClick={onBack} size="icon" variant="ghost">
-          <ChevronLeft className="size-5" />
+      <header className="flex items-center gap-2 border-b px-3 py-2.5">
+        <Button className="size-11" onClick={onBack} size="icon" variant="ghost">
+          <ChevronLeft className="size-6" />
         </Button>
         <PadeloWordmark className="text-xl" />
         <div className="ml-auto flex items-center gap-2">
           <RoomCodeChip code={tournament.roomCode} />
-          <Button onClick={onShare} size="icon" variant="outline">
-            <Share2 className="size-4" />
+          <Button className="size-11" onClick={onShare} size="icon" variant="outline">
+            <Share2 className="size-5" />
           </Button>
         </div>
       </header>
 
-      <div className="px-4 pt-3.5 pb-1">
-        <h1 className="font-display text-[22px] leading-tight font-semibold -tracking-[0.02em]">
+      <div className="px-4 pt-3.5 pb-1.5">
+        <h1 className="font-display text-[28px] leading-tight font-semibold -tracking-[0.02em]">
           {tournament.name}
         </h1>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           {tournament.mode} · {tournament.players.length} players · {tournament.courts} courts · target{" "}
           {tournament.targetScore}
         </p>
@@ -275,7 +278,7 @@ export function Scoreboard({
 
       <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setActiveTab} value={activeTab}>
         <TabsList
-          className="h-10 w-full justify-start gap-5 overflow-x-auto rounded-none border-b bg-transparent p-0 px-4"
+          className="h-12 w-full justify-start gap-7 rounded-none border-b bg-transparent p-0 px-4"
           variant="line"
         >
           {[
@@ -285,7 +288,7 @@ export function Scoreboard({
           ].map(({ id, label }) => (
             <TabsTrigger
               className={cn(
-                "h-10 flex-none rounded-none border-0! bg-transparent px-0 py-0 text-[13px] font-semibold shadow-none!",
+                "h-12 flex-none rounded-none border-0! bg-transparent px-0 py-0 text-base font-semibold shadow-none!",
                 "text-muted-foreground after:hidden data-active:text-foreground",
               )}
               key={id}
@@ -307,14 +310,6 @@ export function Scoreboard({
                   targetScore={tournament.targetScore}
                 />
               ))}
-              {upNext ? (
-                <div className="rounded-xl border border-dashed bg-secondary/50 px-3 py-2.5">
-                  <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-                    up next · round {tournament.currentRoundIndex + 2}
-                  </div>
-                  <div className="mt-1 text-xs text-foreground/80">{upNext}</div>
-                </div>
-              ) : null}
             </>
           ) : (
             <Alert>
@@ -333,23 +328,23 @@ export function Scoreboard({
           {log.length > 0 ? (
             log.map((entry, index) => <LogEntry key={`${entry.ago}-${index}`} {...entry} />)
           ) : (
-            <div className="rounded-lg border border-dashed bg-card px-3 py-4 text-xs text-muted-foreground">
+            <div className="rounded-lg border border-dashed bg-card px-3 py-4 text-sm text-muted-foreground">
               No logs loaded yet.
             </div>
           )}
         </TabsContent>
       </Tabs>
 
-      <footer className="flex gap-2 border-t bg-background px-4 py-3 pb-5">
+      <footer className="flex gap-2 border-t bg-background px-4 py-2 pb-3">
         <Button
-          className="h-12 flex-1 rounded-xl text-[15px] font-semibold"
+          className="h-12 flex-1 text-base font-semibold"
           disabled={!pending}
           onClick={() => pending && onEnterScore(pending.id)}
           size="lg"
         >
           {pending ? `Enter score · Court ${pending.courtNumber}` : "Round complete"}
         </Button>
-        <Button className="h-12 rounded-xl" onClick={onMore} size="lg" variant="secondary">
+        <Button className="size-12" onClick={onMore} size="icon" variant="secondary">
           <MoreHorizontal className="size-5" />
         </Button>
       </footer>

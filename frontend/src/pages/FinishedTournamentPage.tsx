@@ -10,9 +10,6 @@ import { Leaderboard } from "../components/Leaderboard";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
 import { Seo } from "../components/Seo";
-import { playAgain } from "../lib/api";
-import { errorMessage } from "../lib/errors";
-import { saveRecentTournament } from "../lib/recentRooms";
 import { displayMode, normalizeRoomInput } from "../lib/tournament";
 import { useTournament } from "../lib/useTournament";
 
@@ -21,8 +18,6 @@ export function FinishedTournamentPage() {
   const roomCode = params.roomCode ? normalizeRoomInput(params.roomCode) : undefined;
   const navigate = useNavigate();
   const { tournament, isLoading, error } = useTournament(roomCode);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [isPlayingAgain, setIsPlayingAgain] = useState(false);
   const [copied, setCopied] = useState(false);
 
   if (!roomCode) {
@@ -52,23 +47,24 @@ export function FinishedTournamentPage() {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  const onPlayAgain = async () => {
+  const onPlayAgain = () => {
     if (!tournament) {
       return;
     }
 
-    setActionError(null);
-    setIsPlayingAgain(true);
-
-    try {
-      const next = await playAgain(tournament.roomCode);
-      saveRecentTournament(next);
-      navigate(`/t/${next.roomCode}`);
-    } catch (caught) {
-      setActionError(errorMessage(caught));
-    } finally {
-      setIsPlayingAgain(false);
-    }
+    navigate("/new", {
+      state: {
+        prefill: {
+          name: tournament.config.name,
+          mode: tournament.config.mode,
+          players: tournament.config.players.map((player) => player.name),
+          courtCount: tournament.config.courtCount,
+          roundCount: tournament.config.roundCount,
+          targetScore: tournament.config.targetScore,
+        },
+        sourceRoomCode: tournament.roomCode,
+      },
+    });
   };
 
   return (
@@ -119,19 +115,13 @@ export function FinishedTournamentPage() {
             <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{tournament.name}</h1>
           </section>
 
-          {actionError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{actionError}</AlertDescription>
-            </Alert>
-          ) : null}
-
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button onClick={copyResults} variant="secondary">
               {copied ? <Check size={17} /> : <Copy size={17} />}
               {copied ? "Copied" : "Copy results"}
             </Button>
-            <Button disabled={isPlayingAgain} onClick={onPlayAgain}>
-              {isPlayingAgain ? <Spinner /> : <Play size={17} />}
+            <Button onClick={onPlayAgain}>
+              <Play size={17} />
               Play again
             </Button>
           </div>

@@ -4,6 +4,15 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Scoreboard } from "../components/Scoreboard";
 import { ScoreEntryDrawer } from "../components/ScoreEntryDrawer";
@@ -30,6 +39,8 @@ export function TournamentRoomPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [logs, setLogs] = useState<ScoreboardLogEntry[]>([]);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tournament) {
@@ -92,6 +103,10 @@ export function TournamentRoomPage() {
     return <Navigate replace to="/" />;
   }
 
+  if (tournament?.status === "finished") {
+    return <Navigate replace to={`/t/${tournament.roomCode}/done`} />;
+  }
+
   const pageTitle = tournament ? `${tournament.name} Scoreboard | Padelo` : "Padel Tournament Scoreboard | Padelo";
   const pageDescription = tournament
     ? `Live scoreboard for ${tournament.name}, with current round, match results, leaderboard, and tournament history.`
@@ -130,26 +145,26 @@ export function TournamentRoomPage() {
     }
   };
 
+  const requestFinish = () => {
+    setFinishError(null);
+    setIsFinishDialogOpen(true);
+  };
+
   const finish = async () => {
     if (!tournament || isFinishing) {
       return;
     }
 
-    const confirmed = window.confirm("Finish this tournament?");
-
-    if (!confirmed) {
-      return;
-    }
-
-    setActionError(null);
+    setFinishError(null);
     setIsFinishing(true);
 
     try {
       const next = await finishTournament(tournament.roomCode);
       setTournament(next);
+      setIsFinishDialogOpen(false);
       navigate(`/t/${next.roomCode}/done`);
     } catch (caught) {
-      setActionError(errorMessage(caught));
+      setFinishError(errorMessage(caught));
     } finally {
       setIsFinishing(false);
     }
@@ -192,10 +207,9 @@ export function TournamentRoomPage() {
             onBack={() => navigate("/")}
             onChangeRound={setSelectedRoundIndex}
             onEnterScore={setOpenMatchId}
-            onMore={finish}
+            onMore={requestFinish}
             onShare={shareRoom}
             tournament={scoreboardTournament}
-            upNext={upNextText(scoreboardTournament)}
           />
           <ScoreEntryDrawer
             error={actionError}
@@ -212,6 +226,47 @@ export function TournamentRoomPage() {
             roundIndex={scoreboardTournament.currentRoundIndex}
             targetScore={scoreboardTournament.targetScore}
           />
+          <Dialog
+            onOpenChange={(open) => {
+              if (isFinishing) {
+                return;
+              }
+
+              setIsFinishDialogOpen(open);
+
+              if (!open) {
+                setFinishError(null);
+              }
+            }}
+            open={isFinishDialogOpen}
+          >
+            <DialogContent showCloseButton={!isFinishing}>
+              <DialogHeader>
+                <DialogTitle>Finish tournament?</DialogTitle>
+                <DialogDescription>
+                  This locks the current results and opens the final standings page.
+                </DialogDescription>
+              </DialogHeader>
+
+              {finishError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{finishError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button className="h-12 text-base font-semibold" disabled={isFinishing} variant="outline">
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button className="h-12 text-base font-semibold" disabled={isFinishing} onClick={finish}>
+                  {isFinishing ? <Spinner className="size-4" /> : null}
+                  Finish tournament
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       ) : null}
     </>
@@ -280,17 +335,6 @@ function initialsFor(value: string) {
   }
 
   return value.trim().slice(0, 2).toUpperCase() || "??";
-}
-
-function upNextText(tournament: ScoreboardTournament) {
-  const round = tournament.rounds[tournament.currentRoundIndex + 1];
-  const match = round?.matches[0];
-
-  if (!match) {
-    return undefined;
-  }
-
-  return `${match.sideA[0].name} + ${match.sideA[1].name} vs ${match.sideB[0].name} + ${match.sideB[1].name}`;
 }
 
 function toLogEntry(event: TournamentEvent): ScoreboardLogEntry {

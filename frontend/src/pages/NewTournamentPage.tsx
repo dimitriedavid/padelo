@@ -1,6 +1,6 @@
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,21 +14,32 @@ import { Seo } from "../components/Seo";
 import { createTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
-import type { RoundCount, TournamentMode } from "../lib/types";
+import type { CreateTournamentRequest, RoundCount, TournamentMode } from "../lib/types";
 
 type RoundMode = "fixed" | "auto";
 
+type NewTournamentLocationState = {
+  prefill?: CreateTournamentRequest;
+  sourceRoomCode?: string;
+};
+
 export function NewTournamentPage() {
   const navigate = useNavigate();
-  const [name, setName] = useState("Thursday Padel");
-  const [mode, setMode] = useState<TournamentMode>("americano");
-  const [players, setPlayers] = useState(["", "", "", ""]);
-  const [courtCount, setCourtCount] = useState(1);
-  const [targetScore, setTargetScore] = useState(21);
-  const [roundMode, setRoundMode] = useState<RoundMode>("fixed");
-  const [roundValue, setRoundValue] = useState(3);
+  const location = useLocation();
+  const prefill = prefillFromLocationState(location.state);
+  const [name, setName] = useState(prefill?.name ?? "Thursday Padel");
+  const [mode, setMode] = useState<TournamentMode>(prefill?.mode ?? "americano");
+  const [players, setPlayers] = useState(() => initialPlayers(prefill?.players));
+  const [courtCount, setCourtCount] = useState(prefill?.courtCount ?? 1);
+  const [targetScore, setTargetScore] = useState(prefill?.targetScore ?? 21);
+  const [roundMode, setRoundMode] = useState<RoundMode>(prefill?.roundCount.type ?? "fixed");
+  const [roundValue, setRoundValue] = useState(
+    prefill?.roundCount.type === "fixed" ? prefill.roundCount.value : 3,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const playerInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const pendingPlayerFocusIndex = useRef<number | null>(null);
 
   const playerNames = useMemo(
     () => players.map((player) => player.trim()).filter((player) => player.length > 0),
@@ -66,9 +77,47 @@ export function NewTournamentPage() {
     setPlayers((current) => current.map((player, playerIndex) => (playerIndex === index ? value : player)));
   };
 
+  const addPlayer = () => {
+    setPlayers((current) => {
+      pendingPlayerFocusIndex.current = current.length;
+      return [...current, ""];
+    });
+  };
+
   const removePlayer = (index: number) => {
     setPlayers((current) => current.filter((_, playerIndex) => playerIndex !== index));
   };
+
+  const onPlayerKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextInput = playerInputRefs.current[index + 1];
+
+    if (nextInput) {
+      nextInput.focus();
+      nextInput.select();
+      return;
+    }
+
+    addPlayer();
+  };
+
+  useEffect(() => {
+    playerInputRefs.current.length = players.length;
+
+    const index = pendingPlayerFocusIndex.current;
+
+    if (index === null) {
+      return;
+    }
+
+    pendingPlayerFocusIndex.current = null;
+    playerInputRefs.current[index]?.focus();
+  }, [players.length]);
 
   return (
     <PageShell
@@ -129,7 +178,7 @@ export function NewTournamentPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold text-foreground">Players</h2>
               <Button
-                onClick={() => setPlayers((current) => [...current, ""])}
+                onClick={addPlayer}
                 size="sm"
                 type="button"
                 variant="secondary"
@@ -146,7 +195,11 @@ export function NewTournamentPage() {
                     className="h-11"
                     maxLength={60}
                     onChange={(event) => updatePlayer(index, event.target.value)}
+                    onKeyDown={(event) => onPlayerKeyDown(event, index)}
                     placeholder={`Player ${index + 1}`}
+                    ref={(element) => {
+                      playerInputRefs.current[index] = element;
+                    }}
                     value={player}
                   />
                   <Button
@@ -221,4 +274,58 @@ export function NewTournamentPage() {
       </form>
     </PageShell>
   );
+}
+
+function initialPlayers(players: string[] | undefined) {
+  const source = players && players.length > 0 ? players : [];
+
+  return [...source, ...Array.from({ length: Math.max(0, 4 - source.length) }, () => "")];
+}
+
+function prefillFromLocationState(state: unknown): CreateTournamentRequest | null {
+  if (!isObject(state)) {
+    return null;
+  }
+
+  const locationState = state as NewTournamentLocationState;
+
+  if (!isCreateTournamentRequest(locationState.prefill)) {
+    return null;
+  }
+
+  return locationState.prefill;
+}
+
+function isCreateTournamentRequest(value: unknown): value is CreateTournamentRequest {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  const candidate = value as Partial<CreateTournamentRequest>;
+
+  return (
+    typeof candidate.name === "string" &&
+    (candidate.mode === "americano" || candidate.mode === "mexicano") &&
+    Array.isArray(candidate.players) &&
+    candidate.players.every((player) => typeof player === "string") &&
+    typeof candidate.courtCount === "number" &&
+    typeof candidate.targetScore === "number" &&
+    isRoundCount(candidate.roundCount)
+  );
+}
+
+function isRoundCount(value: unknown): value is RoundCount {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  if (value.type === "auto") {
+    return true;
+  }
+
+  return value.type === "fixed" && typeof value.value === "number";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

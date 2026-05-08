@@ -46,6 +46,65 @@ describe("NewTournamentPage", () => {
     expect(await screen.findByText("Room opened")).toBeInTheDocument();
     expect(localStorage.getItem("padelo.recentRooms")).toContain("ROOM42");
   });
+
+  it("moves through player inputs with enter and adds a new player from the last input", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const playerOne = screen.getByPlaceholderText("Player 1");
+
+    await user.click(playerOne);
+    await user.keyboard("{Enter}");
+    expect(screen.getByPlaceholderText("Player 2")).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByPlaceholderText("Player 3")).toHaveFocus();
+
+    await user.click(screen.getByPlaceholderText("Player 4"));
+    await user.keyboard("{Enter}");
+    expect(await screen.findByPlaceholderText("Player 5")).toHaveFocus();
+  });
+
+  it("prefills the form from play-again navigation state", () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/new",
+            state: {
+              prefill: {
+                name: "Friday Rematch",
+                mode: "mexicano",
+                players: ["Alex", "Bianca", "Chris", "Dana", "Eli"],
+                courtCount: 2,
+                roundCount: { type: "auto" },
+                targetScore: 15,
+              },
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByDisplayValue("Friday Rematch")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Player 1")).toHaveValue("Alex");
+    expect(screen.getByPlaceholderText("Player 5")).toHaveValue("Eli");
+    expect(screen.getByLabelText("Courts")).toHaveValue(2);
+    expect(screen.getByLabelText("Target score")).toHaveValue(15);
+    expect(screen.getByRole("tab", { name: "Mexicano" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "Auto" })).toHaveAttribute("data-state", "active");
+  });
 });
 
 function tournament(): Tournament {
@@ -85,4 +144,3 @@ function tournament(): Tournament {
     finishedAt: null,
   };
 }
-
