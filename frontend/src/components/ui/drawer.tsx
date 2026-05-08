@@ -1,10 +1,19 @@
 import * as React from "react"
-import { Dialog as DrawerPrimitive } from "radix-ui"
+import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
 
-function Drawer({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />
+function Drawer({
+  shouldScaleBackground = true,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+  return (
+    <DrawerPrimitive.Root
+      data-slot="drawer"
+      shouldScaleBackground={shouldScaleBackground}
+      {...props}
+    />
+  )
 }
 
 function DrawerTrigger({
@@ -55,13 +64,13 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[96dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border border-b-0 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-10 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-10",
+          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[96dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border border-b-0 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg outline-none",
           className
         )}
         {...props}
       >
         {showHandle ? (
-          <div className="mx-auto mt-2 mb-1 h-1 w-9 shrink-0 rounded-full bg-border" />
+          <DrawerPrimitive.Handle className="mt-2 mb-1 bg-border" />
         ) : null}
         {children}
       </DrawerPrimitive.Content>
@@ -122,6 +131,7 @@ export {
   Drawer,
   DrawerTrigger,
   DrawerClose,
+  DrawerPortal,
   DrawerContent,
   DrawerHeader,
   DrawerFooter,
