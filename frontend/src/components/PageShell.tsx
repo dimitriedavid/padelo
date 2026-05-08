@@ -16,7 +16,7 @@ export function PageShell({ children, actions }: PageShellProps) {
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
               P
             </span>
-            <span className="truncate text-lg font-semibold">Padelo</span>
+            <span className="truncate font-display text-lg font-semibold">Padelo</span>
           </Link>
           {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </div>
