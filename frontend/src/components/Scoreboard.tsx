@@ -1,11 +1,13 @@
 // Padelo scoreboard screen — mobile-first, shadcn/ui + Tailwind.
 
-import { ChevronLeft, MoreHorizontal, Share2 } from "lucide-react";
+import { House, MoreHorizontal, Share2 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { type KeyboardEvent, useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
@@ -35,11 +37,17 @@ function fmtDiff(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
-function RoomCodeChip({ code }: { code: string }) {
+function RoomCodeChip({ code, onClick }: { code: string; onClick: () => void }) {
   return (
-    <Badge className="gap-1 rounded-md px-2 py-1 font-mono text-xs uppercase" variant="secondary">
-      <span className="text-xs tracking-widest text-muted-foreground">Room</span>
-      <span className="font-display text-sm font-bold tracking-tight text-primary">{code}</span>
+    <Badge
+      asChild
+      className="h-9 cursor-pointer gap-1.5 rounded-md px-3 py-0.5 font-mono uppercase transition-colors hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      variant="secondary"
+    >
+      <button aria-label={`Show QR code for room ${code}`} onClick={onClick} type="button">
+        <span className="text-sm tracking-widest text-muted-foreground">Room</span>
+        <span className="font-display text-base font-bold tracking-tight text-primary">{code}</span>
+      </button>
     </Badge>
   );
 }
@@ -238,8 +246,16 @@ export function Scoreboard({
   onEnterScore,
 }: ScoreboardProps) {
   const [activeTab, setActiveTab] = useState("round");
+  const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
   const round = tournament.rounds[tournament.currentRoundIndex];
   const pending = round?.matches.find((match) => match.result == null);
+  const roomUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return `/t/${tournament.roomCode}`;
+    }
+
+    return new URL(`/t/${encodeURIComponent(tournament.roomCode)}`, window.location.href).toString();
+  }, [tournament.roomCode]);
   const sortedStandings = useMemo(
     () => [...tournament.standings].sort((a, b) => b.wins - a.wins || b.pointDiff - a.pointDiff),
     [tournament.standings],
@@ -247,15 +263,15 @@ export function Scoreboard({
 
   return (
     <div className="flex h-dvh w-full flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b px-3 py-2.5">
-        <Button className="size-11" onClick={onBack} size="icon" variant="ghost">
-          <ChevronLeft className="size-6" />
-        </Button>
-        <PadeloWordmark className="text-xl" />
+      <header className="flex items-center gap-2 border-b px-3 py-1">
+        <PadeloWordmark className="text-2xl" />
         <div className="ml-auto flex items-center gap-2">
-          <RoomCodeChip code={tournament.roomCode} />
-          <Button className="size-11" onClick={onShare} size="icon" variant="outline">
+          <RoomCodeChip code={tournament.roomCode} onClick={() => setIsRoomQrOpen(true)} />
+          <Button aria-label="Share room" className="size-11" onClick={onShare} size="icon" variant="outline">
             <Share2 className="size-5" />
+          </Button>
+          <Button aria-label="Home" className="size-11" onClick={onBack} size="icon" variant="outline">
+            <House className="size-5" />
           </Button>
         </div>
       </header>
@@ -348,6 +364,28 @@ export function Scoreboard({
           <MoreHorizontal className="size-5" />
         </Button>
       </footer>
+
+      <Dialog onOpenChange={setIsRoomQrOpen} open={isRoomQrOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Room {tournament.roomCode}</DialogTitle>
+            <DialogDescription>Scan this code to open the tournament room.</DialogDescription>
+          </DialogHeader>
+          <div className="mx-auto rounded-xl border bg-white p-3">
+            <QRCodeSVG
+              bgColor="#ffffff"
+              fgColor="#15211b"
+              includeMargin={false}
+              level="M"
+              size={224}
+              value={roomUrl}
+            />
+          </div>
+          <div className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
+            {roomUrl}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
