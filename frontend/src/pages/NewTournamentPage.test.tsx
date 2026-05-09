@@ -9,6 +9,7 @@ import type { Tournament } from "../lib/types";
 describe("NewTournamentPage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     localStorage.clear();
   });
 
@@ -72,6 +73,162 @@ describe("NewTournamentPage", () => {
     expect(await screen.findByPlaceholderText("Player 5")).toHaveFocus();
   });
 
+  it("defaults target score to 24 and derives courts from player count", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText("Target score")).toHaveValue(24);
+    expect(screen.getByLabelText("Courts")).toHaveValue(1);
+
+    for (let index = 0; index < 4; index += 1) {
+      await user.click(screen.getByRole("button", { name: "Add" }));
+    }
+
+    const names = ["Alex", "Bianca", "Chris", "Dana", "Eli", "Fatima", "Gabi", "Hana"];
+
+    for (const [index, name] of names.entries()) {
+      await user.type(screen.getByPlaceholderText(`Player ${index + 1}`), name);
+    }
+
+    expect(screen.getByLabelText("Courts")).toHaveValue(2);
+  });
+
+  it("defaults the tournament name from the current day and time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 9, 9));
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Morning Padel - May 9");
+  });
+
+  it("uses more specific day parts for the default tournament name", () => {
+    vi.useFakeTimers();
+
+    const cases = [
+      { hour: 2, expected: "Saturday Late Night Padel - May 9" },
+      { hour: 13, expected: "Saturday Afternoon Padel - May 9" },
+      { hour: 18, expected: "Saturday Evening Padel - May 9" },
+      { hour: 22, expected: "Saturday Night Padel - May 9" },
+    ];
+
+    for (const { hour, expected } of cases) {
+      vi.setSystemTime(new Date(2026, 4, 9, hour));
+
+      const { unmount } = render(
+        <MemoryRouter initialEntries={["/new"]}>
+          <Routes>
+            <Route element={<NewTournamentPage />} path="/new" />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByLabelText("Tournament name")).toHaveValue(expected);
+      unmount();
+    }
+  });
+
+  it("lets numeric fields be cleared before entering a new value", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const courts = screen.getByLabelText("Courts");
+    const targetScore = screen.getByLabelText("Target score");
+    const fixedRounds = screen.getByLabelText("Rounds");
+
+    await user.clear(courts);
+    expect(courts).toHaveValue(null);
+    await user.type(courts, "2");
+    expect(courts).toHaveValue(2);
+
+    await user.clear(targetScore);
+    expect(targetScore).toHaveValue(null);
+    await user.type(targetScore, "24");
+    expect(targetScore).toHaveValue(24);
+
+    await user.clear(fixedRounds);
+    expect(fixedRounds).toHaveValue(null);
+    await user.type(fixedRounds, "5");
+    expect(fixedRounds).toHaveValue(5);
+  });
+
+  it("shows Americano round guidance for a complete player rotation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const names = ["Alex", "Bianca", "Chris", "Dana"];
+
+    for (const [index, name] of names.entries()) {
+      await user.type(screen.getByPlaceholderText(`Player ${index + 1}`), name);
+    }
+
+    expect(screen.getByText("Minimum 3 rounds needed for everyone to play with everyone.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByPlaceholderText("Player 5"), "Eli");
+
+    expect(screen.getByText("Minimum 5 rounds needed for everyone to play with everyone.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Infinite rounds" }));
+
+    expect(screen.queryByText(/rounds needed for everyone to play with everyone/i)).not.toBeInTheDocument();
+    expect(screen.getByText("You can finish the tournament after any number of rounds.")).toBeInTheDocument();
+  });
+
+  it("toggles round count into infinite mode from the input button", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const rounds = screen.getByLabelText("Rounds");
+    const infiniteButton = screen.getByRole("button", { name: "Infinite rounds" });
+
+    expect(rounds).toHaveValue(3);
+    expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(infiniteButton);
+    expect(rounds).toHaveValue("∞");
+    expect(infiniteButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("You can finish the tournament after any number of rounds.")).toBeInTheDocument();
+
+    await user.click(infiniteButton);
+    expect(rounds).toHaveValue(3);
+    expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("prefills the form from play-again navigation state", () => {
     render(
       <MemoryRouter
@@ -84,7 +241,7 @@ describe("NewTournamentPage", () => {
                 mode: "mexicano",
                 players: ["Alex", "Bianca", "Chris", "Dana", "Eli"],
                 courtCount: 2,
-                roundCount: { type: "auto" },
+                roundCount: { type: "infinite" },
                 targetScore: 15,
               },
             },
@@ -102,8 +259,9 @@ describe("NewTournamentPage", () => {
     expect(screen.getByPlaceholderText("Player 5")).toHaveValue("Eli");
     expect(screen.getByLabelText("Courts")).toHaveValue(2);
     expect(screen.getByLabelText("Target score")).toHaveValue(15);
-    expect(screen.getByRole("tab", { name: "Mexicano" })).toHaveAttribute("data-state", "active");
-    expect(screen.getByRole("tab", { name: "Auto" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("radio", { name: /Mexicano/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText("Rounds")).toHaveValue("∞");
+    expect(screen.getByRole("button", { name: "Infinite rounds" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

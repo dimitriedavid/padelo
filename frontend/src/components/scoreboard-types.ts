@@ -1,4 +1,4 @@
-import type { MatchResult, TournamentMode, TournamentRoundStatus } from "@/lib/types";
+import type { MatchResult, RoundCount, TournamentMode, TournamentRoundStatus } from "@/lib/types";
 
 export type ScoreboardPlayerId = string;
 
@@ -36,6 +36,7 @@ export type ScoreboardTournament = {
   roomCode: string;
   name: string;
   mode: TournamentMode;
+  roundCount: RoundCount;
   targetScore: number;
   totalRounds: number;
   currentRoundIndex: number;

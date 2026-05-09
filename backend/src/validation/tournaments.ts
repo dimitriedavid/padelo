@@ -145,8 +145,8 @@ function parsePlayers(input: unknown): string[] {
 function parseRoundCount(input: unknown): RoundCount {
   const value = requireObject(input);
 
-  if (value.type === "auto") {
-    return { type: "auto" };
+  if (value.type === "infinite") {
+    return { type: "infinite" };
   }
 
   if (value.type === "fixed") {
@@ -156,7 +156,7 @@ function parseRoundCount(input: unknown): RoundCount {
     };
   }
 
-  throw badRequest("validation_error", "Round count must be fixed or auto.", {
+  throw badRequest("validation_error", "Round count must be fixed or infinite.", {
     field: "roundCount.type",
   });
 }

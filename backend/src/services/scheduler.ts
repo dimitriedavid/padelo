@@ -9,10 +9,10 @@ import type {
 } from "../types/tournament.js";
 
 export function createInitialTournamentState(config: TournamentConfig): TournamentState {
-  const totalRounds = resolveRoundCount(config.roundCount, config.players.length);
+  const roundLimit = resolveRoundLimit(config.roundCount);
   const rounds =
-    config.mode === "americano"
-      ? Array.from({ length: totalRounds }, (_, index) =>
+    config.mode === "americano" && roundLimit !== null
+      ? Array.from({ length: roundLimit }, (_, index) =>
           generateAmericanoRound(config.players, config.courtCount, index),
         )
       : [generateAmericanoRound(config.players, config.courtCount, 0)];
@@ -26,29 +26,32 @@ export function createInitialTournamentState(config: TournamentConfig): Tourname
   });
 }
 
-export function maybeAppendNextMexicanoRound(
+export function maybeAppendNextRound(
   config: TournamentConfig,
   state: TournamentState,
 ): TournamentState {
   const normalizedState = normalizeTournamentState(state);
 
-  if (config.mode !== "mexicano") {
-    return normalizedState;
-  }
-
-  const totalRounds = resolveRoundCount(config.roundCount, config.players.length);
+  const roundLimit = resolveRoundLimit(config.roundCount);
   const latestRound = normalizedState.rounds[normalizedState.rounds.length - 1];
 
-  if (!latestRound || normalizedState.rounds.length >= totalRounds || !isRoundComplete(latestRound)) {
+  if (
+    !latestRound ||
+    (roundLimit !== null && normalizedState.rounds.length >= roundLimit) ||
+    !isRoundComplete(latestRound)
+  ) {
     return normalizedState;
   }
+
+  const nextRoundIndex = normalizedState.rounds.length;
+  const nextRound =
+    config.mode === "mexicano"
+      ? generateMexicanoRound(config, normalizedState, nextRoundIndex)
+      : generateAmericanoRound(config.players, config.courtCount, nextRoundIndex);
 
   return normalizeTournamentState({
     ...normalizedState,
-    rounds: [
-      ...normalizedState.rounds,
-      generateMexicanoRound(config, normalizedState, normalizedState.rounds.length),
-    ],
+    rounds: [...normalizedState.rounds, nextRound],
   });
 }
 
@@ -76,12 +79,12 @@ export function normalizeTournamentState(state: TournamentState): TournamentStat
   };
 }
 
-export function resolveRoundCount(roundCount: RoundCount, playerCount: number): number {
+export function resolveRoundLimit(roundCount: RoundCount): number | null {
   if (roundCount.type === "fixed") {
     return roundCount.value;
   }
 
-  return Math.max(1, playerCount % 2 === 0 ? playerCount - 1 : playerCount);
+  return null;
 }
 
 export function isRoundComplete(round: TournamentRound): boolean {

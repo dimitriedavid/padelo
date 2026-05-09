@@ -1,14 +1,17 @@
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Info, Plus, Trash2 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { PageShell } from "../components/PageShell";
 import { Seo } from "../components/Seo";
 import { createTournament } from "../lib/api";
@@ -16,44 +19,98 @@ import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
 import type { CreateTournamentRequest, RoundCount, TournamentMode } from "../lib/types";
 
-type RoundMode = "fixed" | "auto";
+type RoundMode = "fixed" | "infinite";
 
 type NewTournamentLocationState = {
   prefill?: CreateTournamentRequest;
   sourceRoomCode?: string;
 };
 
+const DEFAULT_TARGET_SCORE = 24;
+const MODE_OPTIONS = [
+  {
+    id: "americano" as const,
+    title: "Americano",
+    description: "Rotating partners",
+  },
+  {
+    id: "mexicano" as const,
+    title: "Mexicano",
+    description: "Performance-based rounds",
+  },
+];
+
 export function NewTournamentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const prefill = prefillFromLocationState(location.state);
-  const [name, setName] = useState(prefill?.name ?? "Thursday Padel");
+  const initialPlayerValues = initialPlayers(prefill?.players);
+  const initialCourtCount =
+    prefill?.courtCount ?? courtCountForPlayerCount(playerNamesFromPlayers(initialPlayerValues).length);
+  const [name, setName] = useState(() => prefill?.name ?? defaultTournamentName());
   const [mode, setMode] = useState<TournamentMode>(prefill?.mode ?? "americano");
-  const [players, setPlayers] = useState(() => initialPlayers(prefill?.players));
-  const [courtCount, setCourtCount] = useState(prefill?.courtCount ?? 1);
-  const [targetScore, setTargetScore] = useState(prefill?.targetScore ?? 21);
-  const [roundMode, setRoundMode] = useState<RoundMode>(prefill?.roundCount.type ?? "fixed");
-  const [roundValue, setRoundValue] = useState(
-    prefill?.roundCount.type === "fixed" ? prefill.roundCount.value : 3,
+  const [players, setPlayers] = useState(() => initialPlayerValues);
+  const [courtCountInput, setCourtCountInput] = useState(() => String(initialCourtCount));
+  const [hasEditedCourtCount, setHasEditedCourtCount] = useState(Boolean(prefill?.courtCount));
+  const [targetScoreInput, setTargetScoreInput] = useState(() =>
+    String(prefill?.targetScore ?? DEFAULT_TARGET_SCORE),
   );
+  const [roundMode, setRoundMode] = useState<RoundMode>(prefill?.roundCount.type ?? "fixed");
+  const [roundValueInput, setRoundValueInput] = useState(() =>
+    String(prefill?.roundCount.type === "fixed" ? prefill.roundCount.value : 3),
+  );
+  const [modeInfo, setModeInfo] = useState<TournamentMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const playerInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingPlayerFocusIndex = useRef<number | null>(null);
+  const pendingPlayerFocusRequest = useRef<{
+    index: number;
+    selectExistingText: boolean;
+  } | null>(null);
+  const pendingPlayerFocusFallback = useRef<number | null>(null);
 
-  const playerNames = useMemo(
-    () => players.map((player) => player.trim()).filter((player) => player.length > 0),
-    [players],
-  );
-  const canSubmit = name.trim().length > 0 && playerNames.length >= 4 && !isSubmitting;
+  const playerNames = useMemo(() => playerNamesFromPlayers(players), [players]);
+  const courtCount = positiveIntegerFromInput(courtCountInput);
+  const targetScore = positiveIntegerFromInput(targetScoreInput);
+  const roundValue = positiveIntegerFromInput(roundValueInput);
+  const americanoCompleteRotationRounds =
+    playerNames.length >= 4 ? roundsForCompleteAmericanoRotation(playerNames.length) : null;
+  const hasValidNumbers =
+    courtCount !== null && targetScore !== null && (roundMode === "infinite" || roundValue !== null);
+  const canSubmit = name.trim().length > 0 && playerNames.length >= 4 && hasValidNumbers && !isSubmitting;
+
+  useEffect(() => {
+    if (hasEditedCourtCount) {
+      return;
+    }
+
+    setCourtCountInput(String(courtCountForPlayerCount(playerNames.length)));
+  }, [hasEditedCourtCount, playerNames.length]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    setIsSubmitting(true);
 
-    const roundCount: RoundCount =
-      roundMode === "auto" ? { type: "auto" } : { type: "fixed", value: roundValue };
+    if (courtCount === null || targetScore === null) {
+      setError("Enter valid numbers for courts and target score.");
+      return;
+    }
+
+    let roundCount: RoundCount;
+
+    if (roundMode === "infinite") {
+      roundCount = { type: "infinite" };
+    } else {
+      if (roundValue === null) {
+        setError("Enter a valid number of rounds.");
+        return;
+      }
+
+      roundCount = { type: "fixed", value: roundValue };
+    }
+
+    setIsSubmitting(true);
 
     try {
       const tournament = await createTournament({
@@ -88,6 +145,49 @@ export function NewTournamentPage() {
     setPlayers((current) => current.filter((_, playerIndex) => playerIndex !== index));
   };
 
+  const focusPlayerInput = (index: number, selectExistingText = false) => {
+    const input = playerInputRefs.current[index];
+
+    if (!input) {
+      return false;
+    }
+
+    input.focus();
+
+    if (selectExistingText && input.value.length > 0) {
+      input.select();
+    } else {
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    return true;
+  };
+
+  const focusPendingPlayerInput = () => {
+    const request = pendingPlayerFocusRequest.current;
+
+    if (!request || !focusPlayerInput(request.index, request.selectExistingText)) {
+      return;
+    }
+
+    pendingPlayerFocusRequest.current = null;
+
+    if (pendingPlayerFocusFallback.current !== null) {
+      window.clearTimeout(pendingPlayerFocusFallback.current);
+      pendingPlayerFocusFallback.current = null;
+    }
+  };
+
+  const queuePlayerFocus = (index: number, selectExistingText = false) => {
+    pendingPlayerFocusRequest.current = { index, selectExistingText };
+
+    if (pendingPlayerFocusFallback.current !== null) {
+      window.clearTimeout(pendingPlayerFocusFallback.current);
+    }
+
+    pendingPlayerFocusFallback.current = window.setTimeout(focusPendingPlayerInput, 80);
+  };
+
   const onPlayerKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
     if (event.key !== "Enter") {
       return;
@@ -95,15 +195,21 @@ export function NewTournamentPage() {
 
     event.preventDefault();
 
-    const nextInput = playerInputRefs.current[index + 1];
-
-    if (nextInput) {
-      nextInput.focus();
-      nextInput.select();
+    if (playerInputRefs.current[index + 1]) {
+      queuePlayerFocus(index + 1, true);
       return;
     }
 
     addPlayer();
+  };
+
+  const onPlayerKeyUp = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    focusPendingPlayerInput();
   };
 
   useEffect(() => {
@@ -116,8 +222,17 @@ export function NewTournamentPage() {
     }
 
     pendingPlayerFocusIndex.current = null;
-    playerInputRefs.current[index]?.focus();
+    queuePlayerFocus(index);
   }, [players.length]);
+
+  useEffect(
+    () => () => {
+      if (pendingPlayerFocusFallback.current !== null) {
+        window.clearTimeout(pendingPlayerFocusFallback.current);
+      }
+    },
+    [],
+  );
 
   return (
     <PageShell
@@ -163,12 +278,49 @@ export function NewTournamentPage() {
 
             <div className="space-y-2">
               <Label>Mode</Label>
-              <Tabs onValueChange={(value) => setMode(value as TournamentMode)} value={mode}>
-                <TabsList className="grid h-11 w-full grid-cols-2">
-                  <TabsTrigger value="americano">Americano</TabsTrigger>
-                  <TabsTrigger value="mexicano">Mexicano</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <RadioGroup
+                className="grid gap-2 sm:grid-cols-2"
+                onValueChange={(value) => setMode(value as TournamentMode)}
+                value={mode}
+              >
+                {MODE_OPTIONS.map((option) => {
+                  const active = mode === option.id;
+                  const inputId = `mode-${option.id}`;
+
+                  return (
+                    <div
+                      className={cn(
+                        "flex min-h-16 cursor-pointer items-start gap-3 rounded-lg border bg-card px-3 pt-3 pb-2.5 transition-colors",
+                        "hover:bg-secondary/50 focus-within:ring-3 focus-within:ring-ring/50",
+                        active && "border-primary bg-accent text-accent-foreground",
+                      )}
+                      key={option.id}
+                      onClick={() => setMode(option.id)}
+                    >
+                      <RadioGroupItem className="mt-1" id={inputId} value={option.id} />
+                      <Label className="min-w-0 flex-1 cursor-pointer flex-col items-start gap-1" htmlFor={inputId}>
+                        <span className="font-display text-base font-semibold leading-none">
+                          {option.title}
+                        </span>
+                        <span className="text-sm text-muted-foreground">{option.description}</span>
+                      </Label>
+                      <Button
+                        aria-label={`${option.title} rules`}
+                        className="size-9 shrink-0 rounded-md"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setModeInfo(option.id);
+                        }}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Info className="size-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
             </div>
           </CardContent>
         </Card>
@@ -192,10 +344,13 @@ export function NewTournamentPage() {
               {players.map((player, index) => (
                 <div className="flex gap-2" key={index}>
                   <Input
+                    autoCapitalize="words"
                     className="h-11"
+                    enterKeyHint="next"
                     maxLength={60}
                     onChange={(event) => updatePlayer(index, event.target.value)}
                     onKeyDown={(event) => onPlayerKeyDown(event, index)}
+                    onKeyUp={onPlayerKeyUp}
                     placeholder={`Player ${index + 1}`}
                     ref={(element) => {
                       playerInputRefs.current[index] = element;
@@ -226,9 +381,12 @@ export function NewTournamentPage() {
                 className="h-11"
                 id="court-count"
                 min={1}
-                onChange={(event) => setCourtCount(Number(event.target.value))}
+                onChange={(event) => {
+                  setHasEditedCourtCount(true);
+                  setCourtCountInput(event.target.value);
+                }}
                 type="number"
-                value={courtCount}
+                value={courtCountInput}
               />
             </div>
 
@@ -238,28 +396,52 @@ export function NewTournamentPage() {
                 className="h-11"
                 id="target-score"
                 min={1}
-                onChange={(event) => setTargetScore(Number(event.target.value))}
+                onChange={(event) => setTargetScoreInput(event.target.value)}
                 type="number"
-                value={targetScore}
+                value={targetScoreInput}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Rounds</Label>
-              <Tabs onValueChange={(value) => setRoundMode(value as RoundMode)} value={roundMode}>
-                <TabsList className="grid h-11 w-full grid-cols-2">
-                  <TabsTrigger value="fixed">Fixed</TabsTrigger>
-                  <TabsTrigger value="auto">Auto</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {roundMode === "fixed" ? (
+              <Label htmlFor="round-count">Rounds</Label>
+              <ButtonGroup className="h-11 w-full">
                 <Input
-                  className="h-11"
-                  min={1}
-                  onChange={(event) => setRoundValue(Number(event.target.value))}
-                  type="number"
-                  value={roundValue}
+                  className="h-11 text-base"
+                  id="round-count"
+                  inputMode={roundMode === "fixed" ? "numeric" : undefined}
+                  min={roundMode === "fixed" ? 1 : undefined}
+                  onChange={(event) => {
+                    if (roundMode === "fixed") {
+                      setRoundValueInput(event.target.value);
+                    }
+                  }}
+                  readOnly={roundMode === "infinite"}
+                  type={roundMode === "infinite" ? "text" : "number"}
+                  value={roundMode === "infinite" ? "∞" : roundValueInput}
                 />
+                <Button
+                  aria-label="Infinite rounds"
+                  aria-pressed={roundMode === "infinite"}
+                  className={cn(
+                    "h-11 min-w-14 px-4 font-display text-2xl leading-none font-semibold",
+                    roundMode === "infinite" &&
+                      "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+                  )}
+                  onClick={() => setRoundMode((current) => (current === "infinite" ? "fixed" : "infinite"))}
+                  type="button"
+                  variant="outline"
+                >
+                  ∞
+                </Button>
+              </ButtonGroup>
+              {roundMode === "infinite" ? (
+                <p className="text-sm text-muted-foreground">
+                  You can finish the tournament after any number of rounds.
+                </p>
+              ) : mode === "americano" && americanoCompleteRotationRounds !== null ? (
+                <p className="text-sm text-muted-foreground">
+                  Minimum {americanoCompleteRotationRounds} rounds needed for everyone to play with everyone.
+                </p>
               ) : null}
             </div>
           </CardContent>
@@ -272,7 +454,49 @@ export function NewTournamentPage() {
           </Button>
         </div>
       </form>
+      <Dialog onOpenChange={(open) => !open && setModeInfo(null)} open={modeInfo !== null}>
+        {modeInfo ? (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{modeInfo === "americano" ? "Americano rules" : "Mexicano rules"}</DialogTitle>
+              <DialogDescription>
+                {modeInfo === "americano"
+                  ? "Balanced rounds with rotating partners."
+                  : "Performance-based rounds that regroup players as scores come in."}
+              </DialogDescription>
+            </DialogHeader>
+            <ModeRules mode={modeInfo} />
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </PageShell>
+  );
+}
+
+function ModeRules({ mode }: { mode: TournamentMode }) {
+  if (mode === "americano") {
+    return (
+      <div className="space-y-3 text-sm leading-6 text-foreground">
+        <p>Americano creates a rotating schedule where players change partners across rounds.</p>
+        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+          <li>Rounds are generated up front from the player list.</li>
+          <li>Players collect the points their side scores in each match.</li>
+          <li>The standings rank players by total points first, then wins, ties, and point difference.</li>
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 text-sm leading-6 text-foreground">
+      <p>Mexicano creates each next round from the current standings.</p>
+      <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+        <li>After a round is complete, players are ordered by performance.</li>
+        <li>Each court uses a group of four ranked players.</li>
+        <li>Within that group, player #1 partners with #4, and #2 partners with #3.</li>
+        <li>The next round is generated only after the current round has scores.</li>
+      </ul>
+    </div>
   );
 }
 
@@ -280,6 +504,56 @@ function initialPlayers(players: string[] | undefined) {
   const source = players && players.length > 0 ? players : [];
 
   return [...source, ...Array.from({ length: Math.max(0, 4 - source.length) }, () => "")];
+}
+
+function playerNamesFromPlayers(players: string[]) {
+  return players.map((player) => player.trim()).filter((player) => player.length > 0);
+}
+
+function courtCountForPlayerCount(playerCount: number) {
+  return Math.max(1, Math.floor(playerCount / 4));
+}
+
+function roundsForCompleteAmericanoRotation(playerCount: number) {
+  return playerCount % 2 === 0 ? playerCount - 1 : playerCount;
+}
+
+function positiveIntegerFromInput(value: string) {
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return parsed >= 1 ? parsed : null;
+}
+
+function defaultTournamentName(now = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(now);
+  const date = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long" }).format(now);
+  const dayPart = dayPartForHour(now.getHours());
+
+  return `${weekday} ${dayPart} Padel - ${date}`;
+}
+
+function dayPartForHour(hour: number) {
+  if (hour < 6) {
+    return "Late Night";
+  }
+
+  if (hour < 12) {
+    return "Morning";
+  }
+
+  if (hour < 17) {
+    return "Afternoon";
+  }
+
+  if (hour < 21) {
+    return "Evening";
+  }
+
+  return "Night";
 }
 
 function prefillFromLocationState(state: unknown): CreateTournamentRequest | null {
@@ -319,7 +593,7 @@ function isRoundCount(value: unknown): value is RoundCount {
     return false;
   }
 
-  if (value.type === "auto") {
+  if (value.type === "infinite") {
     return true;
   }
 

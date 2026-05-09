@@ -19,8 +19,8 @@ export function displayMode(mode: string): string {
 export function displayRoundCount(tournament: Tournament): string {
   const { roundCount } = tournament.config;
 
-  if (roundCount.type === "auto") {
-    return `${tournament.state.rounds.length} auto`;
+  if (roundCount.type === "infinite") {
+    return "∞ rounds";
   }
 
   return `${roundCount.value} rounds`;
@@ -36,4 +36,3 @@ export function formatDateTime(value: string): string {
     timeStyle: "short",
   }).format(new Date(value));
 }
-

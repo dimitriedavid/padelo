@@ -300,6 +300,7 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
     roomCode: tournament.roomCode,
     name: tournament.name,
     mode: tournament.config.mode,
+    roundCount: tournament.config.roundCount,
     targetScore: tournament.state.targetScore,
     totalRounds: rounds.length,
     currentRoundIndex,

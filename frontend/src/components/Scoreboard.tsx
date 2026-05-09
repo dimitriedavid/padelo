@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, House, MoreHorizontal, Share2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { type KeyboardEvent, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,10 @@ type ScoreboardProps = {
 
 function won(match: ScoreboardMatch, side: MatchSide) {
   return match.result?.winningSide === side;
+}
+
+function roundCountLabel(tournament: ScoreboardTournament) {
+  return tournament.roundCount.type === "infinite" ? "∞ rounds" : `${tournament.roundCount.value} rounds`;
 }
 
 function RoomCodeChip({ code, onClick }: { code: string; onClick: () => void }) {
@@ -296,6 +300,11 @@ export function Scoreboard({
 }: ScoreboardProps) {
   const [activeTab, setActiveTab] = useState("round");
   const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
+  const [roundAnnouncement, setRoundAnnouncement] = useState<number | null>(null);
+  const previousActiveRoundRef = useRef({
+    activeRoundIndex: tournament.activeRoundIndex,
+    roomCode: tournament.roomCode,
+  });
   const round = tournament.rounds[tournament.currentRoundIndex];
   const activeRound = tournament.rounds[tournament.activeRoundIndex];
   const currentRoundHasNoScores = activeRound?.matches.every((match) => match.result == null) ?? false;
@@ -319,6 +328,32 @@ export function Scoreboard({
     [tournament.standings],
   );
 
+  useEffect(() => {
+    const previous = previousActiveRoundRef.current;
+
+    if (
+      previous.roomCode === tournament.roomCode &&
+      tournament.activeRoundIndex > previous.activeRoundIndex
+    ) {
+      setRoundAnnouncement(tournament.activeRoundIndex + 1);
+    }
+
+    previousActiveRoundRef.current = {
+      activeRoundIndex: tournament.activeRoundIndex,
+      roomCode: tournament.roomCode,
+    };
+  }, [tournament.activeRoundIndex, tournament.roomCode]);
+
+  useEffect(() => {
+    if (roundAnnouncement === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setRoundAnnouncement(null), 1200);
+
+    return () => window.clearTimeout(timeout);
+  }, [roundAnnouncement]);
+
   return (
     <div className="flex h-dvh w-full flex-col bg-background text-foreground">
       <header className="flex items-center gap-2 border-b px-3 py-1">
@@ -340,7 +375,7 @@ export function Scoreboard({
         </h1>
         <p className="mt-1 text-base text-muted-foreground">
           {tournament.mode} · {tournament.players.length} players · {tournament.courts} courts · target{" "}
-          {tournament.targetScore}
+          {tournament.targetScore} · {roundCountLabel(tournament)}
         </p>
       </div>
 
@@ -367,24 +402,46 @@ export function Scoreboard({
           ))}
         </TabsList>
 
-        <TabsContent className="m-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3" value="round">
-          {round ? (
-            <>
-              {round.matches.map((match) => (
-                <CourtCard
-                  key={match.id}
-                  match={match}
-                  editable={isRoundEditable}
-                  onEnterScore={onEnterScore}
-                  targetScore={tournament.targetScore}
-                />
-              ))}
-            </>
-          ) : (
-            <Alert>
-              <AlertDescription>No round available.</AlertDescription>
-            </Alert>
-          )}
+        <TabsContent className="relative m-0 flex-1 overflow-y-auto px-4 py-3" value="round">
+          <div
+            className={cn(
+              "space-y-2.5 transition-[filter,opacity] duration-200",
+              roundAnnouncement !== null && "blur-[3px] opacity-70",
+            )}
+          >
+            {round ? (
+              <>
+                {round.matches.map((match) => (
+                  <CourtCard
+                    key={match.id}
+                    match={match}
+                    editable={isRoundEditable}
+                    onEnterScore={onEnterScore}
+                    targetScore={tournament.targetScore}
+                  />
+                ))}
+              </>
+            ) : (
+              <Alert>
+                <AlertDescription>No round available.</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          {roundAnnouncement !== null ? (
+            <div
+              aria-live="polite"
+              className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-background/25 backdrop-blur-[2px]"
+              role="status"
+            >
+              <div
+                className="animate-round-advance font-display text-6xl leading-none font-bold tracking-tight text-primary"
+                key={roundAnnouncement}
+              >
+                Round {roundAnnouncement}
+              </div>
+            </div>
+          ) : null}
         </TabsContent>
 
         <TabsContent className="m-0 flex-1 space-y-1 overflow-y-auto px-4 py-3" value="standings">
@@ -423,7 +480,7 @@ export function Scoreboard({
             <DialogTitle>Room {tournament.roomCode}</DialogTitle>
             <DialogDescription>Scan this code to open the tournament room.</DialogDescription>
           </DialogHeader>
-          <div className="mx-auto rounded-xl border bg-white p-3">
+          <div className="mx-auto bg-white p-3">
             <QRCodeSVG
               bgColor="#ffffff"
               fgColor="#15211b"

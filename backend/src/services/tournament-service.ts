@@ -10,13 +10,14 @@ import { generateRoomCode, normalizeRoomCode } from "./room-code.js";
 import {
   createInitialTournamentState,
   isRoundComplete,
-  maybeAppendNextMexicanoRound,
+  maybeAppendNextRound,
   normalizeTournamentState,
 } from "./scheduler.js";
 import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
   MatchResult,
+  RoundCount,
   TournamentConfig,
   TournamentMatch,
   TournamentPlayer,
@@ -55,7 +56,7 @@ export class TournamentService {
       mode: request.mode,
       targetScore: request.targetScore,
       courtCount: request.courtCount,
-      roundCount: request.roundCount,
+      roundCount: normalizeRoundCount(request.roundCount),
       players,
     };
     const state = createInitialTournamentState(config);
@@ -160,7 +161,7 @@ export class TournamentService {
 
     matchRef.match.result = result;
 
-    const updatedState = maybeAppendNextMexicanoRound(
+    const updatedState = maybeAppendNextRound(
       tournament.config,
       normalizeStateAfterMatchChange(tournament.config, state, matchRef.round.index),
     );
@@ -345,6 +346,14 @@ function createPlayers(playerNames: string[]): TournamentPlayer[] {
     id: `p${index + 1}`,
     name,
   }));
+}
+
+function normalizeRoundCount(roundCount: RoundCount): RoundCount {
+  if (roundCount.type === "fixed") {
+    return roundCount;
+  }
+
+  return { type: "infinite" };
 }
 
 function findMatch(

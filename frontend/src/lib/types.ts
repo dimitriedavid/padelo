@@ -2,7 +2,7 @@ export type TournamentMode = "americano" | "mexicano";
 
 export type TournamentStatus = "active" | "finished";
 
-export type RoundCount = { type: "fixed"; value: number } | { type: "auto" };
+export type RoundCount = { type: "fixed"; value: number } | { type: "infinite" };
 
 export type TournamentConfig = {
   name: string;

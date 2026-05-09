@@ -4,7 +4,7 @@ export type TournamentStatus = "active" | "finished";
 
 export type RoundCount =
   | { type: "fixed"; value: number }
-  | { type: "auto" };
+  | { type: "infinite" };
 
 export type TournamentConfig = {
   name: string;

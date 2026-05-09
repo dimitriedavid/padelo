@@ -20,6 +20,7 @@ export function useTournament(roomCode: string | undefined): UseTournamentResult
 
   const setTournament = useCallback((next: Tournament) => {
     setTournamentState(next);
+    setError(null);
     saveRecentTournament(next);
   }, []);
 
@@ -52,7 +53,9 @@ export function useTournament(roomCode: string | undefined): UseTournamentResult
       return;
     }
 
-    const events = new EventSource(`/api/tournaments/${encodeURIComponent(roomCode)}/stream`);
+    let events: EventSource | null = null;
+    let reconnectTimeout: number | null = null;
+    let cancelled = false;
 
     const handleEvent = (event: MessageEvent<string>) => {
       const parsed = parseTournamentEvent(event.data);
@@ -62,16 +65,77 @@ export function useTournament(roomCode: string | undefined): UseTournamentResult
       }
     };
 
-    events.addEventListener("connected", handleEvent);
-    events.addEventListener("tournament_updated", handleEvent);
-    events.onerror = () => {
-      setError("Live updates disconnected. The page will keep showing the latest loaded state.");
+    const backgroundRefresh = async () => {
+      try {
+        const next = await getTournament(roomCode);
+
+        if (!cancelled) {
+          setTournament(next);
+        }
+      } catch {
+        // Keep showing the latest loaded state; the stream/browser lifecycle handlers will retry.
+      }
     };
 
-    return () => {
+    const closeStream = () => {
+      if (!events) {
+        return;
+      }
+
       events.removeEventListener("connected", handleEvent);
       events.removeEventListener("tournament_updated", handleEvent);
       events.close();
+      events = null;
+    };
+
+    const openStream = () => {
+      closeStream();
+
+      events = new EventSource(`/api/tournaments/${encodeURIComponent(roomCode)}/stream`);
+      events.addEventListener("connected", handleEvent);
+      events.addEventListener("tournament_updated", handleEvent);
+      events.onerror = () => {
+        if (reconnectTimeout !== null) {
+          return;
+        }
+
+        reconnectTimeout = window.setTimeout(() => {
+          reconnectTimeout = null;
+          void backgroundRefresh();
+
+          if (!cancelled && events?.readyState === EventSource.CLOSED) {
+            openStream();
+          }
+        }, 1500);
+      };
+    };
+
+    const refreshAndReconnect = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+
+      void backgroundRefresh();
+      openStream();
+    };
+
+    openStream();
+
+    document.addEventListener("visibilitychange", refreshAndReconnect);
+    window.addEventListener("focus", refreshAndReconnect);
+    window.addEventListener("online", refreshAndReconnect);
+
+    return () => {
+      cancelled = true;
+
+      if (reconnectTimeout !== null) {
+        window.clearTimeout(reconnectTimeout);
+      }
+
+      document.removeEventListener("visibilitychange", refreshAndReconnect);
+      window.removeEventListener("focus", refreshAndReconnect);
+      window.removeEventListener("online", refreshAndReconnect);
+      closeStream();
     };
   }, [roomCode, setTournament]);
 

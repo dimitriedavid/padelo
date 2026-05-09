@@ -3,16 +3,15 @@ import { describe, it } from "node:test";
 
 import {
   createInitialTournamentState,
-  maybeAppendNextMexicanoRound,
-  resolveRoundCount,
+  maybeAppendNextRound,
+  resolveRoundLimit,
 } from "./scheduler.js";
 import type { TournamentConfig, TournamentPlayer, TournamentRound, TournamentState } from "../types/tournament.js";
 
 describe("scheduler", () => {
-  it("resolves auto round count from player count", () => {
-    assert.equal(resolveRoundCount({ type: "auto" }, 4), 3);
-    assert.equal(resolveRoundCount({ type: "auto" }, 5), 5);
-    assert.equal(resolveRoundCount({ type: "fixed", value: 8 }, 5), 8);
+  it("resolves infinite round count without a round limit", () => {
+    assert.equal(resolveRoundLimit({ type: "infinite" }), null);
+    assert.equal(resolveRoundLimit({ type: "fixed", value: 8 }), 8);
   });
 
   it("generates all Americano fixed rounds at creation", () => {
@@ -126,10 +125,28 @@ describe("scheduler", () => {
     assert.equal(state.rounds[0]?.status, "active");
   });
 
+  it("generates only the first Americano round for infinite tournaments", () => {
+    const state = createInitialTournamentState(config({ mode: "americano", roundCount: "infinite" }));
+
+    assert.equal(state.rounds.length, 1);
+    assert.equal(state.rounds[0]?.status, "active");
+  });
+
+  it("appends the next Americano round after an infinite round completes", () => {
+    const tournamentConfig = config({ mode: "americano", roundCount: "infinite" });
+    const state = completeFirstMatch(createInitialTournamentState(tournamentConfig));
+    const updatedState = maybeAppendNextRound(tournamentConfig, state);
+
+    assert.equal(updatedState.rounds.length, 2);
+    assert.equal(updatedState.currentRoundIndex, 1);
+    assert.equal(updatedState.rounds[0]?.status, "complete");
+    assert.equal(updatedState.rounds[1]?.status, "active");
+  });
+
   it("appends the next Mexicano round after the latest round completes", () => {
     const tournamentConfig = config({ mode: "mexicano", roundCount: 2 });
     const state = completeFirstMatch(createInitialTournamentState(tournamentConfig));
-    const updatedState = maybeAppendNextMexicanoRound(tournamentConfig, state);
+    const updatedState = maybeAppendNextRound(tournamentConfig, state);
 
     assert.equal(updatedState.rounds.length, 2);
     assert.equal(updatedState.currentRoundIndex, 1);
@@ -140,7 +157,7 @@ describe("scheduler", () => {
   it("does not append Mexicano rounds beyond the configured round count", () => {
     const tournamentConfig = config({ mode: "mexicano", roundCount: 1 });
     const state = completeFirstMatch(createInitialTournamentState(tournamentConfig));
-    const updatedState = maybeAppendNextMexicanoRound(tournamentConfig, state);
+    const updatedState = maybeAppendNextRound(tournamentConfig, state);
 
     assert.equal(updatedState.rounds.length, 1);
     assert.equal(updatedState.rounds[0]?.status, "complete");
@@ -173,7 +190,7 @@ describe("scheduler", () => {
       enteredAt: "2026-05-07T12:01:00.000Z",
     };
 
-    const updatedState = maybeAppendNextMexicanoRound(tournamentConfig, state);
+    const updatedState = maybeAppendNextRound(tournamentConfig, state);
     const nextRound = updatedState.rounds[1];
     const leaderboardOrder = updatedState.leaderboard.map((entry) => entry.playerId);
 
@@ -188,7 +205,7 @@ describe("scheduler", () => {
 
 function config(overrides: {
   mode: "americano" | "mexicano";
-  roundCount: number;
+  roundCount: number | "infinite";
   players?: string[];
   courtCount?: number;
 }): TournamentConfig {
@@ -202,7 +219,10 @@ function config(overrides: {
     mode: overrides.mode,
     targetScore: 21,
     courtCount: overrides.courtCount ?? 1,
-    roundCount: { type: "fixed", value: overrides.roundCount },
+    roundCount:
+      overrides.roundCount === "infinite"
+        ? { type: "infinite" }
+        : { type: "fixed", value: overrides.roundCount },
     players,
   };
 }
@@ -263,4 +283,3 @@ function completeFirstMatch(state: TournamentState): TournamentState {
 
   return state;
 }
-

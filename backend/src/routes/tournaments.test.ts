@@ -263,6 +263,33 @@ describe("tournament routes", () => {
     assert.equal(requireObject(rounds[1]).status, "active");
   });
 
+  it("generates the next Americano round for infinite tournaments", async () => {
+    const { app } = createTestApp({ roomCodes: ["INF123"] });
+    await createTournament(app, {
+      mode: "americano",
+      players: ["A", "B", "C", "D"],
+      roundCount: { type: "infinite" },
+    });
+
+    const response = await app.request("/api/tournaments/INF123/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const tournament = requireObject((await readJsonObject(response)).tournament);
+    const state = requireObject(tournament.state);
+    const rounds = requireArray(state.rounds);
+
+    assert.equal(response.status, 200);
+    assert.equal(rounds.length, 2);
+    assert.equal(state.currentRoundIndex, 1);
+    assert.equal(requireObject(rounds[1]).status, "active");
+  });
+
   it("allows editing the last completed Mexicano round after advancement", async () => {
     const { app } = createTestApp({ roomCodes: ["MEX123"] });
     await createTournament(app, {
