@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NewTournamentPage } from "./NewTournamentPage";
+import { localDateString } from "../lib/tournament";
 import type { Tournament } from "../lib/types";
 
 describe("NewTournamentPage", () => {
@@ -15,6 +16,7 @@ describe("NewTournamentPage", () => {
 
   it("submits a create tournament request and navigates to the room", async () => {
     const user = userEvent.setup();
+    const expectedDate = localDateString();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ tournament: tournament() }), {
         status: 201,
@@ -44,6 +46,14 @@ describe("NewTournamentPage", () => {
         method: "POST",
       }),
     );
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+    expect(requestBody).toMatchObject({
+      date: expectedDate,
+    });
+    expect(requestBody.name).toMatch(/Padel$/);
+    expect(requestBody.name).not.toContain(" - ");
     expect(await screen.findByText("Room opened")).toBeInTheDocument();
     expect(localStorage.getItem("padelo.recentRooms")).toContain("ROOM42");
   });
@@ -134,17 +144,17 @@ describe("NewTournamentPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Morning Padel - May 9");
+    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Morning Padel");
   });
 
   it("uses more specific day parts for the default tournament name", () => {
     vi.useFakeTimers();
 
     const cases = [
-      { hour: 2, expected: "Saturday Late Night Padel - May 9" },
-      { hour: 13, expected: "Saturday Afternoon Padel - May 9" },
-      { hour: 18, expected: "Saturday Evening Padel - May 9" },
-      { hour: 22, expected: "Saturday Night Padel - May 9" },
+      { hour: 2, expected: "Saturday Late Night Padel" },
+      { hour: 13, expected: "Saturday Afternoon Padel" },
+      { hour: 18, expected: "Saturday Evening Padel" },
+      { hour: 22, expected: "Saturday Night Padel" },
     ];
 
     for (const { hour, expected } of cases) {
@@ -321,7 +331,7 @@ describe("NewTournamentPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Evening Padel - May 9");
+    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Evening Padel");
     expect(screen.getByPlaceholderText("Player 1")).toHaveValue("Alex");
     expect(screen.getByPlaceholderText("Player 5")).toHaveValue("Eli");
     expect(screen.getByLabelText("Courts")).toHaveValue(2);
@@ -339,6 +349,7 @@ function tournament(): Tournament {
     name: "Thursday Padel",
     config: {
       name: "Thursday Padel",
+      date: "2026-05-09",
       mode: "americano",
       targetScore: 21,
       courtCount: 1,

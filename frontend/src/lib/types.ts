@@ -6,6 +6,7 @@ export type RoundCount = { type: "fixed"; value: number } | { type: "infinite" }
 
 export type TournamentConfig = {
   name: string;
+  date?: string;
   mode: TournamentMode;
   targetScore: number;
   courtCount: number;
@@ -78,6 +79,7 @@ export type LeaderboardEntry = {
 
 export type CreateTournamentRequest = {
   name: string;
+  date: string;
   mode: TournamentMode;
   players: string[];
   courtCount: number;
@@ -92,6 +94,10 @@ export type UpsertMatchResultRequest = {
 };
 
 export type DeleteMatchResultRequest = {
+  expectedStateVersion: number;
+};
+
+export type FinishTournamentRequest = {
   expectedStateVersion: number;
 };
 
@@ -111,6 +117,7 @@ export type TournamentEvent = {
 export type RecentRoom = {
   code: string;
   name: string;
+  date?: string;
   lastOpenedAt: string;
   mode?: TournamentMode;
   playerCount?: number;

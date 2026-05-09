@@ -177,7 +177,9 @@ export function TournamentRoomPage() {
     setIsFinishing(true);
 
     try {
-      const next = await finishTournament(tournament.roomCode);
+      const next = await finishTournament(tournament.roomCode, {
+        expectedStateVersion: tournament.stateVersion,
+      });
       setTournament(next);
       setIsFinishDialogOpen(false);
       navigate(`/t/${next.roomCode}/done`);
@@ -379,6 +381,7 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
   return {
     roomCode: tournament.roomCode,
     name: tournament.name,
+    date: tournament.config.date,
     mode: tournament.config.mode,
     roundCount: tournament.config.roundCount,
     targetScore: tournament.state.targetScore,

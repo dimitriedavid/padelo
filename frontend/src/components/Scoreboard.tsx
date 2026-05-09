@@ -1,6 +1,6 @@
 // Padelo scoreboard screen — mobile-first, shadcn/ui + Tailwind.
 
-import { ChevronLeft, ChevronRight, Flag, House, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, House, QrCode, Share2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
@@ -9,9 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { displayMode, formatShortTournamentDate } from "@/lib/tournament";
 import { cn } from "@/lib/utils";
 import { AppHeader } from "./AppHeader";
 import { LeaderboardPanel, type LeaderboardPanelRow } from "./LeaderboardPanel";
+import { MetadataLine } from "./MetadataLine";
 import { AvatarStack } from "./PadeloBrand";
 import type {
   ScoreboardLogEntry,
@@ -37,21 +39,6 @@ function won(match: ScoreboardMatch, side: MatchSide) {
 
 function roundCountLabel(tournament: ScoreboardTournament) {
   return tournament.roundCount.type === "infinite" ? "∞ rounds" : `${tournament.roundCount.value} rounds`;
-}
-
-function RoomCodeChip({ code, onClick }: { code: string; onClick: () => void }) {
-  return (
-    <Badge
-      asChild
-      className="h-9 cursor-pointer gap-1.5 rounded-md px-3 py-0.5 font-mono uppercase transition-colors hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      variant="secondary"
-    >
-      <button aria-label={`Show QR code for room ${code}`} onClick={onClick} type="button">
-        <span className="text-sm tracking-widest text-muted-foreground">Room</span>
-        <span className="font-display text-base font-bold tracking-tight text-primary">{code}</span>
-      </button>
-    </Badge>
-  );
 }
 
 type RoundPageItem = number | "ellipsis-start" | "ellipsis-end";
@@ -291,6 +278,14 @@ export function Scoreboard({
   });
   const round = tournament.rounds[tournament.currentRoundIndex];
   const activeRound = tournament.rounds[tournament.activeRoundIndex];
+  const tournamentMetadata = [
+    formatShortTournamentDate(tournament.date),
+    displayMode(tournament.mode),
+    `${tournament.players.length} players`,
+    `${tournament.courts} courts`,
+    `target ${tournament.targetScore}`,
+    roundCountLabel(tournament),
+  ].filter((item): item is string => Boolean(item));
   const currentRoundHasNoScores = activeRound?.matches.every((match) => match.result == null) ?? false;
   const isLastCompletedRound =
     tournament.currentRoundIndex === tournament.activeRoundIndex - 1 && round?.status === "complete";
@@ -355,7 +350,16 @@ export function Scoreboard({
       <AppHeader
         actions={
           <>
-            <RoomCodeChip code={tournament.roomCode} onClick={() => setIsRoomQrOpen(true)} />
+            <Button
+              aria-label="Show room QR code"
+              className="size-11"
+              onClick={() => setIsRoomQrOpen(true)}
+              size="icon"
+              title="Show room QR code"
+              variant="outline"
+            >
+              <QrCode className="size-5" />
+            </Button>
             <Button aria-label="Share room" className="size-11" onClick={onShare} size="icon" variant="outline">
               <Share2 className="size-5" />
             </Button>
@@ -372,10 +376,7 @@ export function Scoreboard({
         <h1 className="font-display text-[28px] leading-tight font-semibold -tracking-[0.02em]">
           {tournament.name}
         </h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          {tournament.mode} · {tournament.players.length} players · {tournament.courts} courts · target{" "}
-          {tournament.targetScore} · {roundCountLabel(tournament)}
-        </p>
+        <MetadataLine className="mt-1 text-base" items={tournamentMetadata} />
       </div>
 
       <Tabs className="flex min-h-0 flex-1 flex-col overflow-hidden" onValueChange={setActiveTab} value={activeTab}>
@@ -481,8 +482,8 @@ export function Scoreboard({
       <Dialog onOpenChange={setIsRoomQrOpen} open={isRoomQrOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Room {tournament.roomCode}</DialogTitle>
-            <DialogDescription>Scan this code to open the tournament room.</DialogDescription>
+            <DialogTitle>Join this room</DialogTitle>
+            <DialogDescription>Scan the QR to open this tournament.</DialogDescription>
           </DialogHeader>
           <div className="mx-auto bg-white p-3">
             <QRCodeSVG
@@ -493,9 +494,6 @@ export function Scoreboard({
               size={224}
               value={roomUrl}
             />
-          </div>
-          <div className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
-            {roomUrl}
           </div>
         </DialogContent>
       </Dialog>

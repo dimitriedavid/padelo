@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Leaderboard } from "../components/Leaderboard";
+import { MetadataLine } from "../components/MetadataLine";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
 import { Seo } from "../components/Seo";
 import { TOURNAMENT_NOT_FOUND_MESSAGE } from "../lib/errors";
-import { displayRoundCount, normalizeRoomInput } from "../lib/tournament";
+import { displayMode, displayRoundCount, formatShortTournamentDate, normalizeRoomInput } from "../lib/tournament";
 import { useTournament } from "../lib/useTournament";
 
 export function FinishedTournamentPage() {
@@ -45,6 +46,16 @@ export function FinishedTournamentPage() {
   const pageDescription = tournament
     ? `Final leaderboard and round results for ${tournament.name}.`
     : "View final Padelo tournament results, leaderboard standings, and completed rounds.";
+  const tournamentMetadata = tournament
+    ? [
+        formatShortTournamentDate(tournament.config.date),
+        displayMode(tournament.config.mode),
+        `${tournament.state.players.length} players`,
+        `${tournament.config.courtCount} courts`,
+        `target ${tournament.config.targetScore}`,
+        displayRoundCount(tournament),
+      ].filter((item): item is string => Boolean(item))
+    : [];
 
   const shareResults = async () => {
     if (!tournament) {
@@ -135,11 +146,7 @@ export function FinishedTournamentPage() {
             <h1 className="font-display text-[28px] leading-tight font-semibold -tracking-[0.02em] text-foreground">
               {tournament.name}
             </h1>
-            <p className="mt-1 text-base text-muted-foreground">
-              {tournament.config.mode} · {tournament.state.players.length} players ·{" "}
-              {tournament.config.courtCount} courts · target {tournament.config.targetScore} ·{" "}
-              {displayRoundCount(tournament)}
-            </p>
+            <MetadataLine className="mt-1 text-base" items={tournamentMetadata} />
           </section>
 
           <Leaderboard tournament={tournament} />

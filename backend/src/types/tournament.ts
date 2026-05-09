@@ -8,6 +8,7 @@ export type RoundCount =
 
 export type TournamentConfig = {
   name: string;
+  date?: string;
   mode: TournamentMode;
   targetScore: number;
   courtCount: number;
@@ -67,6 +68,7 @@ export type LeaderboardEntry = {
 
 export type CreateTournamentRequest = {
   name: string;
+  date: string;
   mode: TournamentMode;
   players: string[];
   courtCount: number;
@@ -81,6 +83,10 @@ export type UpsertMatchResultRequest = {
 };
 
 export type DeleteMatchResultRequest = {
+  expectedStateVersion: number;
+};
+
+export type FinishTournamentRequest = {
   expectedStateVersion: number;
 };
 

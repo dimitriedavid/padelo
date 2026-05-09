@@ -18,6 +18,7 @@ describe("recent rooms", () => {
     expect(rooms).toHaveLength(2);
     expect(rooms[0]).toMatchObject({
       code: "AAA111",
+      date: "2026-05-09",
       mode: "americano",
       name: "First Updated",
       playerCount: 4,
@@ -33,6 +34,7 @@ function tournament(overrides: Partial<Tournament>): Tournament {
     name: "Room",
     config: {
       name: "Room",
+      date: "2026-05-09",
       mode: "americano",
       targetScore: 21,
       courtCount: 1,

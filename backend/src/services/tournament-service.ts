@@ -16,6 +16,7 @@ import {
 import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
+  FinishTournamentRequest,
   MatchResult,
   RoundCount,
   TournamentConfig,
@@ -53,6 +54,7 @@ export class TournamentService {
     const players = createPlayers(request.players);
     const config: TournamentConfig = {
       name: request.name,
+      date: request.date,
       mode: request.mode,
       targetScore: request.targetScore,
       courtCount: request.courtCount,
@@ -87,6 +89,7 @@ export class TournamentService {
           payload: {
             roomCode,
             name: config.name,
+            date: config.date,
             mode: config.mode,
             playerCount: config.players.length,
             courtCount: config.courtCount,
@@ -227,12 +230,8 @@ export class TournamentService {
     });
   }
 
-  async finishTournament(roomCode: string): Promise<TournamentEntity> {
-    const tournament = await this.getTournament(roomCode);
-
-    if (tournament.status === "finished") {
-      return tournament;
-    }
+  async finishTournament(roomCode: string, request: FinishTournamentRequest): Promise<TournamentEntity> {
+    const tournament = await this.requireEditableTournament(roomCode, request.expectedStateVersion);
 
     const now = this.now();
 
@@ -257,6 +256,7 @@ export class TournamentService {
 
     const createdTournament = await this.createTournament({
       name: sourceTournament.config.name,
+      date: sourceTournament.config.date ?? localDateString(this.now()),
       mode: sourceTournament.config.mode,
       players: sourceTournament.config.players.map((player) => player.name),
       courtCount: sourceTournament.config.courtCount,
@@ -339,6 +339,14 @@ export class TournamentService {
 
     return updated;
   }
+}
+
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function createPlayers(playerNames: string[]): TournamentPlayer[] {

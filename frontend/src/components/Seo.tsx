@@ -8,7 +8,7 @@ const SITE_NAME = "Padelo";
 const FEATURE_LIST = [
   "Americano and Mexicano padel tournament setup",
   "Game mode guidance for groups of 4, 8, or more players",
-  "Shareable room codes",
+  "Shareable live tournament rooms",
   "Live tournament scoreboard",
   "Round and match result tracking",
   "Final leaderboard and results sharing",
@@ -30,7 +30,7 @@ const FAQ_LIST = [
   {
     question: "Can Padelo generate fair padel rounds and track scores?",
     answer:
-      "Yes. Padelo creates Americano and Mexicano rounds, shares a room code, tracks live scores, and keeps standings for every player.",
+      "Yes. Padelo creates Americano and Mexicano rounds, opens a shareable live room, tracks scores, and keeps standings for every player.",
   },
 ];
 

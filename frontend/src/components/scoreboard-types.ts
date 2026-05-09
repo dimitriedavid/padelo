@@ -35,6 +35,7 @@ export type ScoreboardRound = {
 export type ScoreboardTournament = {
   roomCode: string;
   name: string;
+  date?: string | undefined;
   mode: TournamentMode;
   roundCount: RoundCount;
   targetScore: number;

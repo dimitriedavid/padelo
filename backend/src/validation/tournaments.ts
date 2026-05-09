@@ -2,6 +2,7 @@ import { badRequest } from "../domain/errors.js";
 import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
+  FinishTournamentRequest,
   RoundCount,
   TournamentMode,
   UpsertMatchResultRequest,
@@ -11,10 +12,12 @@ const MAX_PLAYERS = 64;
 const MAX_COURTS = 16;
 const MAX_FIXED_ROUNDS = 100;
 const MAX_TARGET_SCORE = 99;
+const TOURNAMENT_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function parseCreateTournamentRequest(input: unknown): CreateTournamentRequest {
   const value = requireObject(input);
   const name = requireString(value.name, "name").trim();
+  const date = parseTournamentDate(value.date);
   const mode = parseMode(value.mode);
   const players = parsePlayers(value.players);
   const courtCount = requireInteger(value.courtCount, "courtCount", 1, MAX_COURTS);
@@ -33,6 +36,7 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
 
   return {
     name,
+    date,
     mode,
     players,
     courtCount,
@@ -41,16 +45,44 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
   };
 }
 
+function parseTournamentDate(input: unknown): string {
+  if (typeof input !== "string") {
+    throw badRequest("validation_error", "Tournament date is required.", { field: "date" });
+  }
+
+  const date = input.trim();
+  const match = TOURNAMENT_DATE_PATTERN.exec(date);
+
+  if (!match) {
+    throw badRequest("validation_error", "Tournament date must use YYYY-MM-DD format.", {
+      field: "date",
+    });
+  }
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw badRequest("validation_error", "Tournament date must be a valid calendar date.", {
+      field: "date",
+    });
+  }
+
+  return date;
+}
+
 export function parseUpsertMatchResultRequest(input: unknown): UpsertMatchResultRequest {
   const value = requireObject(input);
   const sideAScore = requireInteger(value.sideAScore, "sideAScore", 0, MAX_TARGET_SCORE);
   const sideBScore = requireInteger(value.sideBScore, "sideBScore", 0, MAX_TARGET_SCORE);
-  const expectedStateVersion = requireInteger(
-    value.expectedStateVersion,
-    "expectedStateVersion",
-    1,
-    Number.MAX_SAFE_INTEGER,
-  );
+  const expectedStateVersion = parseExpectedStateVersion(value);
 
   return {
     sideAScore,
@@ -63,13 +95,25 @@ export function parseDeleteMatchResultRequest(input: unknown): DeleteMatchResult
   const value = requireObject(input);
 
   return {
-    expectedStateVersion: requireInteger(
-      value.expectedStateVersion,
-      "expectedStateVersion",
-      1,
-      Number.MAX_SAFE_INTEGER,
-    ),
+    expectedStateVersion: parseExpectedStateVersion(value),
   };
+}
+
+export function parseFinishTournamentRequest(input: unknown): FinishTournamentRequest {
+  const value = requireObject(input);
+
+  return {
+    expectedStateVersion: parseExpectedStateVersion(value),
+  };
+}
+
+function parseExpectedStateVersion(value: Record<string, unknown>): number {
+  return requireInteger(
+    value.expectedStateVersion,
+    "expectedStateVersion",
+    1,
+    Number.MAX_SAFE_INTEGER,
+  );
 }
 
 function parseMode(input: unknown): TournamentMode {

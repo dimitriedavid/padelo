@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { createTestApp } from "../test/create-test-app.js";
+import { TOURNAMENT_REQUEST_BODY_LIMIT_BYTES } from "./tournaments.js";
 
 describe("tournament routes", () => {
   it("creates and reads an Americano tournament", async () => {
@@ -14,11 +15,13 @@ describe("tournament routes", () => {
     });
     const created = await readJsonObject(createResponse);
     const tournament = requireObject(created.tournament);
+    const config = requireObject(tournament.config);
     const state = requireObject(tournament.state);
     const rounds = requireArray(state.rounds);
 
     assert.equal(createResponse.status, 201);
     assert.equal(tournament.roomCode, "ABC123");
+    assert.equal(config.date, "2026-05-09");
     assert.equal(tournament.stateVersion, 1);
     assert.equal(tournament.status, "active");
     assert.equal(rounds.length, 2);
@@ -42,6 +45,149 @@ describe("tournament routes", () => {
 
     assert.equal(response.status, 400);
     assert.equal(body.error, "validation_error");
+  });
+
+  it("validates create tournament dates", async () => {
+    const { app } = createTestApp();
+    const response = await app.request("/api/tournaments", {
+      method: "POST",
+      body: JSON.stringify({ ...createRequest(), date: "2026-02-31" }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "validation_error");
+  });
+
+  it("rejects invalid room codes before lookup", async () => {
+    const { app } = createTestApp();
+    const response = await app.request("/api/tournaments/ABC_123");
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "invalid_room_code");
+  });
+
+  it("rejects invalid match IDs before score writes", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app);
+
+    const response = await app.request("/api/tournaments/ROOM42/matches/match-1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 1,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "invalid_match_id");
+  });
+
+  it("rejects oversized JSON bodies before validation", async () => {
+    const { app } = createTestApp();
+    const response = await app.request("/api/tournaments", {
+      method: "POST",
+      body: JSON.stringify({ padding: "x".repeat(TOURNAMENT_REQUEST_BODY_LIMIT_BYTES) }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+    const details = requireObject(body.details);
+
+    assert.equal(response.status, 413);
+    assert.equal(body.error, "payload_too_large");
+    assert.equal(details.maxBytes, TOURNAMENT_REQUEST_BODY_LIMIT_BYTES);
+  });
+
+  it("rate limits tournament creation by client", async () => {
+    const { app } = createTestApp({
+      roomCodes: ["CREATE234567", "CREATE345678"],
+      rateLimitPolicies: {
+        createTournament: { max: 1, windowMs: 60_000 },
+      },
+    });
+    const headers = {
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.10",
+    };
+
+    const firstResponse = await app.request("/api/tournaments", {
+      method: "POST",
+      body: JSON.stringify(createRequest()),
+      headers,
+    });
+    const secondResponse = await app.request("/api/tournaments", {
+      method: "POST",
+      body: JSON.stringify(createRequest()),
+      headers,
+    });
+    const body = await readJsonObject(secondResponse);
+
+    assert.equal(firstResponse.status, 201);
+    assert.equal(secondResponse.status, 429);
+    assert.equal(body.error, "rate_limited");
+    assert.equal(secondResponse.headers.get("retry-after"), "60");
+  });
+
+  it("rate limits room lookups by client", async () => {
+    const { app } = createTestApp({
+      roomCodes: ["LOOKUP234567"],
+      rateLimitPolicies: {
+        lookupTournament: { max: 1, windowMs: 60_000 },
+      },
+    });
+    await createTournament(app);
+
+    const headers = { "x-forwarded-for": "203.0.113.11" };
+    const firstResponse = await app.request("/api/tournaments/lookup234567", { headers });
+    const secondResponse = await app.request("/api/tournaments/lookup234567", { headers });
+    const body = await readJsonObject(secondResponse);
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 429);
+    assert.equal(body.error, "rate_limited");
+  });
+
+  it("rate limits score writes by client", async () => {
+    const { app } = createTestApp({
+      roomCodes: ["WRITE234567"],
+      rateLimitPolicies: {
+        writeTournament: { max: 1, windowMs: 60_000 },
+      },
+    });
+    await createTournament(app);
+
+    const headers = {
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.12",
+    };
+    const firstResponse = await app.request("/api/tournaments/WRITE234567/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 1,
+      }),
+      headers,
+    });
+    const secondResponse = await app.request("/api/tournaments/WRITE234567/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 8,
+        sideBScore: 13,
+        expectedStateVersion: 2,
+      }),
+      headers,
+    });
+    const body = await readJsonObject(secondResponse);
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 429);
+    assert.equal(body.error, "rate_limited");
   });
 
   it("upserts a match result, derives the winner, and writes events", async () => {
@@ -202,6 +348,8 @@ describe("tournament routes", () => {
 
     const finishResponse = await app.request("/api/tournaments/ROOM42/finish", {
       method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 1 }),
+      headers: { "content-type": "application/json" },
     });
     const finished = requireObject((await readJsonObject(finishResponse)).tournament);
 
@@ -221,10 +369,30 @@ describe("tournament routes", () => {
     assert.equal(editResponse.status, 409);
   });
 
+  it("rejects stale finish requests", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app);
+    await upsertFirstResult(app, 1);
+
+    const response = await app.request("/api/tournaments/ROOM42/finish", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 1 }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 409);
+    assert.equal(body.error, "state_version_conflict");
+  });
+
   it("creates a play-again tournament from a finished tournament", async () => {
     const { app } = createTestApp({ roomCodes: ["OLD123", "NEW123"] });
     await createTournament(app);
-    await app.request("/api/tournaments/OLD123/finish", { method: "POST" });
+    await app.request("/api/tournaments/OLD123/finish", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 1 }),
+      headers: { "content-type": "application/json" },
+    });
 
     const response = await app.request("/api/tournaments/OLD123/play-again", {
       method: "POST",
@@ -425,11 +593,69 @@ describe("tournament routes", () => {
     assert.match(update, /event: tournament_updated/);
     assert.match(update, /"stateVersion":2/);
   });
+
+  it("rate limits active SSE streams by client", async () => {
+    const { app } = createTestApp({
+      roomCodes: ["STREAM234567"],
+      rateLimitPolicies: {
+        activeTournamentStreams: { max: 1 },
+      },
+    });
+    await createTournament(app);
+
+    const headers = { "x-forwarded-for": "203.0.113.13" };
+    const firstResponse = await app.request("/api/tournaments/STREAM234567/stream", { headers });
+    const firstReader = firstResponse.body?.getReader();
+
+    assert.equal(firstResponse.status, 200);
+    assert.ok(firstReader);
+
+    const secondResponse = await app.request("/api/tournaments/STREAM234567/stream", { headers });
+    const body = await readJsonObject(secondResponse);
+
+    assert.equal(secondResponse.status, 429);
+    assert.equal(body.error, "rate_limited");
+
+    await firstReader.cancel();
+
+    const thirdResponse = await app.request("/api/tournaments/STREAM234567/stream", { headers });
+    const thirdReader = thirdResponse.body?.getReader();
+
+    assert.equal(thirdResponse.status, 200);
+    assert.ok(thirdReader);
+
+    await thirdReader.cancel();
+  });
+
+  it("rate limits SSE connection attempts by client", async () => {
+    const { app } = createTestApp({
+      roomCodes: ["STREAM345678"],
+      rateLimitPolicies: {
+        openTournamentStream: { max: 1, windowMs: 60_000 },
+      },
+    });
+    await createTournament(app);
+
+    const headers = { "x-forwarded-for": "203.0.113.14" };
+    const firstResponse = await app.request("/api/tournaments/STREAM345678/stream", { headers });
+    const firstReader = firstResponse.body?.getReader();
+
+    assert.equal(firstResponse.status, 200);
+    assert.ok(firstReader);
+    await firstReader.cancel();
+
+    const secondResponse = await app.request("/api/tournaments/STREAM345678/stream", { headers });
+    const body = await readJsonObject(secondResponse);
+
+    assert.equal(secondResponse.status, 429);
+    assert.equal(body.error, "rate_limited");
+  });
 });
 
 function createRequest(overrides: Record<string, unknown> = {}) {
   return {
     name: "Thursday Padel",
+    date: "2026-05-09",
     mode: "americano",
     players: ["Alex", "Bianca", "Chris", "Dana"],
     courtCount: 1,

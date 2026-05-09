@@ -1,37 +1,24 @@
-import { ArrowRight, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link2, Plus, QrCode, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { MetadataLine } from "../components/MetadataLine";
 import { PageShell } from "../components/PageShell";
 import { DEFAULT_SEO_DESCRIPTION, DEFAULT_SEO_TITLE, Seo } from "../components/Seo";
 import { clearRecentRooms, getRecentRooms } from "../lib/recentRooms";
-import { displayMode, normalizeRoomInput } from "../lib/tournament";
+import { displayMode, formatShortTournamentDate } from "../lib/tournament";
 import type { RecentRoom } from "../lib/types";
 
 export function HomePage() {
-  const navigate = useNavigate();
-  const [roomCode, setRoomCode] = useState("");
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
-  const hasRoomCode = normalizeRoomInput(roomCode).length > 0;
 
   useEffect(() => {
     setRecentRooms(getRecentRooms());
   }, []);
-
-  const onJoin = (event: FormEvent) => {
-    event.preventDefault();
-    const normalized = normalizeRoomInput(roomCode);
-
-    if (normalized) {
-      navigate(`/t/${normalized}`);
-    }
-  };
 
   const onClear = () => {
     clearRecentRooms();
@@ -53,8 +40,8 @@ export function HomePage() {
               Run a padel tournament
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              Padelo creates Americano and Mexicano rounds, tracks scores and standings live, and gives every
-              player a room code to follow along.
+              Padelo creates Americano and Mexicano rounds, tracks scores and standings live, and lets
+              players follow along from a shared link or QR scan.
             </p>
           </div>
 
@@ -99,17 +86,7 @@ export function HomePage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground">{room.name}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                            <span>{room.code}</span>
-                            {room.mode && room.playerCount !== undefined ? (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span>{displayMode(room.mode)}</span>
-                                <span aria-hidden="true">·</span>
-                                <span>{room.playerCount} players</span>
-                              </>
-                            ) : null}
-                          </div>
+                          <MetadataLine className="mt-1 text-sm" items={recentRoomMetadata(room)} />
                         </div>
                         <Badge
                           className={cn(
@@ -132,30 +109,31 @@ export function HomePage() {
         </section>
 
         <section className="rounded-xl border border-dashed bg-card/50 p-3 sm:p-4">
-          <form className="space-y-2" onSubmit={onJoin}>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Label className="text-sm" htmlFor="room-code">
-                Have a room code?
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  autoCapitalize="characters"
-                  className="h-11 min-w-0 flex-1 uppercase"
-                  id="room-code"
-                  inputMode="text"
-                  onChange={(event) => setRoomCode(event.target.value)}
-                  placeholder="ABC123"
-                  value={roomCode}
-                />
-                <Button className="h-11 shrink-0" type="submit" variant={hasRoomCode ? "default" : "outline"}>
-                  <ArrowRight size={17} />
-                  Go
-                </Button>
+          <div className="flex items-start gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-md bg-secondary text-primary">
+              <QrCode size={18} />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <h2 className="text-sm font-semibold text-foreground">Joining a room?</h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Scan the QR on the organizer&apos;s screen or open the URL they share with you.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Link2 size={14} />
+                Shared links open the room directly.
               </div>
             </div>
-          </form>
+          </div>
         </section>
       </div>
     </PageShell>
   );
+}
+
+function recentRoomMetadata(room: RecentRoom): string[] {
+  return [
+    formatShortTournamentDate(room.date),
+    room.mode ? displayMode(room.mode) : null,
+    room.playerCount !== undefined ? `${room.playerCount} players` : null,
+  ].filter((item): item is string => Boolean(item));
 }

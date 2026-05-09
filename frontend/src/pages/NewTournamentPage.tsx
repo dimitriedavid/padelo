@@ -17,10 +17,11 @@ import { Seo } from "../components/Seo";
 import { createTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
+import { localDateString } from "../lib/tournament";
 import type { CreateTournamentRequest, RoundCount, TournamentMode } from "../lib/types";
 
 type RoundMode = "fixed" | "infinite";
-type TournamentPrefill = Omit<CreateTournamentRequest, "name"> & { name?: string };
+type TournamentPrefill = Omit<CreateTournamentRequest, "date" | "name"> & { name?: string };
 
 type NewTournamentLocationState = {
   prefill?: TournamentPrefill;
@@ -137,6 +138,7 @@ export function NewTournamentPage() {
     try {
       const tournament = await createTournament({
         name: name.trim(),
+        date: localDateString(),
         mode,
         players: playerNames,
         courtCount,
@@ -267,7 +269,7 @@ export function NewTournamentPage() {
       }
     >
       <Seo
-        description="Set up an Americano or Mexicano padel tournament with player names, courts, rounds, target score, and a shareable room code."
+        description="Set up an Americano or Mexicano padel tournament with player names, courts, rounds, target score, and a shareable live room."
         path="/new"
         title="Create a Padel Tournament | Padelo"
       />
@@ -275,7 +277,7 @@ export function NewTournamentPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">New tournament</h1>
           <p className="text-sm leading-6 text-muted-foreground">
-            Room access is controlled by the generated room code.
+            After creation, players can join from the QR button or the shared tournament URL.
           </p>
         </div>
 
@@ -568,10 +570,9 @@ function positiveIntegerFromInput(value: string) {
 
 function defaultTournamentName(now = new Date()) {
   const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(now);
-  const date = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long" }).format(now);
   const dayPart = dayPartForHour(now.getHours());
 
-  return `${weekday} ${dayPart} Padel - ${date}`;
+  return `${weekday} ${dayPart} Padel`;
 }
 
 function dayPartForHour(hour: number) {

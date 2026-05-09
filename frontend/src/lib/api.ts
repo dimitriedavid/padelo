@@ -1,6 +1,7 @@
 import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
+  FinishTournamentRequest,
   Tournament,
   TournamentEvent,
   UpsertMatchResultRequest,
@@ -81,11 +82,12 @@ export async function deleteMatchResult(
   return body.tournament;
 }
 
-export async function finishTournament(roomCode: string): Promise<Tournament> {
+export async function finishTournament(roomCode: string, payload: FinishTournamentRequest): Promise<Tournament> {
   const body = await request<TournamentResponse>(
     `/api/tournaments/${encodeURIComponent(roomCode)}/finish`,
     {
       method: "POST",
+      body: JSON.stringify(payload),
     },
   );
 
@@ -146,4 +148,3 @@ async function readJson(response: Response): Promise<unknown> {
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-

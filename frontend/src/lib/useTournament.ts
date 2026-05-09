@@ -27,7 +27,7 @@ export function useTournament(roomCode: string | undefined): UseTournamentResult
   const refresh = useCallback(async () => {
     if (!roomCode) {
       setIsLoading(false);
-      setError("Missing room code.");
+      setError("Missing room link.");
       return;
     }
 

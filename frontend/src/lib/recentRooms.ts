@@ -27,6 +27,7 @@ export function saveRecentTournament(tournament: Tournament): RecentRoom[] {
   const room: RecentRoom = {
     code: tournament.roomCode,
     name: tournament.name,
+    ...(tournament.config.date ? { date: tournament.config.date } : {}),
     lastOpenedAt: new Date().toISOString(),
     mode: tournament.config.mode,
     playerCount: tournament.config.players.length,
@@ -56,6 +57,7 @@ function isRecentRoom(value: unknown): value is RecentRoom {
   return (
     typeof candidate.code === "string" &&
     typeof candidate.name === "string" &&
+    (candidate.date === undefined || typeof candidate.date === "string") &&
     typeof candidate.lastOpenedAt === "string" &&
     (candidate.mode === undefined || candidate.mode === "americano" || candidate.mode === "mexicano") &&
     (candidate.playerCount === undefined ||

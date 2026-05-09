@@ -55,6 +55,13 @@ api.padelo.fun -> http://padelo-backend:8123
 The web frontend does not need `api.padelo.fun`; keep it only for direct API
 access, debugging, or future external clients.
 
+### Request Body Limits
+
+Tournament API request bodies are capped at 64 KiB in both the app middleware
+and the frontend nginx `/api/` proxy. Configure the Cloudflare route or WAF for
+the same 64 KiB maximum on `/api/*` requests so oversized bodies are rejected at
+the edge before they reach the tunnel.
+
 ### Deploy
 
 Copy the environment example and set a real database password:
