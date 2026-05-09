@@ -56,74 +56,158 @@ function RoundPagination({
   onChange?: ((index: number) => void) | undefined;
   className?: string | undefined;
 }) {
-  const pages = paginationItems(total, current);
+  const mobilePages = mobilePaginationItems(total, current);
+  const desktopPages = paginationItems(total, current);
   const canGoPrevious = current > 0;
   const canGoNext = current < total - 1;
 
   return (
-    <nav aria-label="Round pagination" className={cn("flex items-center justify-start gap-1", className)}>
-      <Button
-        aria-label="Previous round"
-        className="size-10 shrink-0"
-        disabled={!canGoPrevious}
-        onClick={() => canGoPrevious && onChange?.(current - 1)}
-        size="icon"
-        type="button"
-        variant="outline"
-      >
-        <ChevronLeft className="size-5" />
-      </Button>
+    <div className={cn("min-w-0", className)}>
+      <nav aria-label="Round pagination" className="flex min-w-0 items-center justify-start gap-1 sm:hidden">
+        <Button
+          aria-label="Previous round"
+          className="size-9 shrink-0"
+          disabled={!canGoPrevious}
+          onClick={() => canGoPrevious && onChange?.(current - 1)}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
 
-      {pages.map((page) => {
-        if (typeof page !== "number") {
+        {mobilePages.map((page) => {
+          if (typeof page !== "number") {
+            return (
+              <span
+                aria-hidden="true"
+                className="grid h-9 w-6 shrink-0 place-items-center text-sm font-semibold text-muted-foreground"
+                key={page}
+              >
+                ...
+              </span>
+            );
+          }
+
+          const pageIndex = page - 1;
+          const active = pageIndex === current;
+          const complete = pageIndex < activeRound;
+
           return (
-            <span
-              aria-hidden="true"
-              className="grid size-9 shrink-0 place-items-center text-base font-semibold text-muted-foreground"
+            <Button
+              aria-current={active ? "page" : undefined}
+              aria-label={`Round ${page}`}
+              className={cn(
+                "size-9 shrink-0 font-display text-sm font-semibold tracking-tight tabular-nums",
+                complete && !active && "border-accent bg-accent text-accent-foreground hover:bg-accent/80",
+                active && "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
               key={page}
+              onClick={() => onChange?.(pageIndex)}
+              size="icon"
+              type="button"
+              variant={active ? "default" : "outline"}
             >
-              ...
-            </span>
+              {page}
+            </Button>
           );
-        }
+        })}
 
-        const pageIndex = page - 1;
-        const active = pageIndex === current;
-        const complete = pageIndex < activeRound;
+        <Button
+          aria-label="Next round"
+          className="size-9 shrink-0"
+          disabled={!canGoNext}
+          onClick={() => canGoNext && onChange?.(current + 1)}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </nav>
 
-        return (
-          <Button
-            aria-current={active ? "page" : undefined}
-            aria-label={`Round ${page}`}
-            className={cn(
-              "size-10 shrink-0 font-display text-base font-semibold tracking-tight tabular-nums",
-              complete && !active && "border-accent bg-accent text-accent-foreground hover:bg-accent/80",
-              active && "bg-primary text-primary-foreground hover:bg-primary/90",
-            )}
-            key={page}
-            onClick={() => onChange?.(pageIndex)}
-            size="icon"
-            type="button"
-            variant={active ? "default" : "outline"}
-          >
-            {page}
-          </Button>
-        );
-      })}
+      <nav aria-label="Round pagination" className="hidden items-center justify-start gap-1 sm:flex">
+        <Button
+          aria-label="Previous round"
+          className="size-10 shrink-0"
+          disabled={!canGoPrevious}
+          onClick={() => canGoPrevious && onChange?.(current - 1)}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          <ChevronLeft className="size-5" />
+        </Button>
 
-      <Button
-        aria-label="Next round"
-        className="size-10 shrink-0"
-        disabled={!canGoNext}
-        onClick={() => canGoNext && onChange?.(current + 1)}
-        size="icon"
-        type="button"
-        variant="outline"
-      >
-        <ChevronRight className="size-5" />
-      </Button>
-    </nav>
+        {desktopPages.map((page) => {
+          if (typeof page !== "number") {
+            return (
+              <span
+                aria-hidden="true"
+                className="grid size-9 shrink-0 place-items-center text-base font-semibold text-muted-foreground"
+                key={page}
+              >
+                ...
+              </span>
+            );
+          }
+
+          const pageIndex = page - 1;
+          const active = pageIndex === current;
+          const complete = pageIndex < activeRound;
+
+          return (
+            <Button
+              aria-current={active ? "page" : undefined}
+              aria-label={`Round ${page}`}
+              className={cn(
+                "size-10 shrink-0 font-display text-base font-semibold tracking-tight tabular-nums",
+                complete && !active && "border-accent bg-accent text-accent-foreground hover:bg-accent/80",
+                active && "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
+              key={page}
+              onClick={() => onChange?.(pageIndex)}
+              size="icon"
+              type="button"
+              variant={active ? "default" : "outline"}
+            >
+              {page}
+            </Button>
+          );
+        })}
+
+        <Button
+          aria-label="Next round"
+          className="size-10 shrink-0"
+          disabled={!canGoNext}
+          onClick={() => canGoNext && onChange?.(current + 1)}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          <ChevronRight className="size-5" />
+        </Button>
+      </nav>
+    </div>
   );
+}
+
+function mobilePaginationItems(total: number, currentIndex: number): RoundPageItem[] {
+  const current = currentIndex + 1;
+
+  if (total <= 4) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  if (current <= 2) {
+    return [1, 2, "ellipsis-end", total];
+  }
+
+  if (current >= total - 1) {
+    return [1, "ellipsis-start", total - 1, total];
+  }
+
+  return [1, "ellipsis-start", current, total];
 }
 
 function paginationItems(total: number, currentIndex: number): RoundPageItem[] {
