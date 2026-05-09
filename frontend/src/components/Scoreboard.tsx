@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { AvatarStack, PadeloWordmark, PlayerAvatar } from "./PadeloBrand";
+import { AppHeader } from "./AppHeader";
+import { AvatarStack, PlayerAvatar } from "./PadeloBrand";
 import type {
   ScoreboardLogEntry,
   ScoreboardMatch,
@@ -356,18 +357,22 @@ export function Scoreboard({
 
   return (
     <div className="flex h-dvh w-full flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b px-3 py-1">
-        <PadeloWordmark className="text-2xl" />
-        <div className="ml-auto flex items-center gap-2">
-          <RoomCodeChip code={tournament.roomCode} onClick={() => setIsRoomQrOpen(true)} />
-          <Button aria-label="Share room" className="size-11" onClick={onShare} size="icon" variant="outline">
-            <Share2 className="size-5" />
-          </Button>
-          <Button aria-label="Home" className="size-11" onClick={onBack} size="icon" variant="outline">
-            <House className="size-5" />
-          </Button>
-        </div>
-      </header>
+      <AppHeader
+        actions={
+          <>
+            <RoomCodeChip code={tournament.roomCode} onClick={() => setIsRoomQrOpen(true)} />
+            <Button aria-label="Share room" className="size-11" onClick={onShare} size="icon" variant="outline">
+              <Share2 className="size-5" />
+            </Button>
+            <Button aria-label="Home" className="size-11" onClick={onBack} size="icon" variant="outline">
+              <House className="size-5" />
+            </Button>
+          </>
+        }
+        constrained={false}
+        logoHref={null}
+        sticky={false}
+      />
 
       <div className="px-4 pt-3.5 pb-1.5">
         <h1 className="font-display text-[28px] leading-tight font-semibold -tracking-[0.02em]">

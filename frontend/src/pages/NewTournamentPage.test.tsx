@@ -73,6 +73,28 @@ describe("NewTournamentPage", () => {
     expect(await screen.findByPlaceholderText("Player 5")).toHaveFocus();
   });
 
+  it("explains why the room cannot be created when the form is incomplete", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const createButton = screen.getByRole("button", { name: /create room/i });
+
+    expect(createButton).toHaveAttribute("aria-disabled", "true");
+
+    await user.click(createButton);
+
+    expect(screen.getByText("Add at least 4 players.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("defaults target score to 24 and derives courts from player count", async () => {
     const user = userEvent.setup();
 
@@ -154,6 +176,7 @@ describe("NewTournamentPage", () => {
 
     const courts = screen.getByLabelText("Courts");
     const targetScore = screen.getByLabelText("Target score");
+    await user.click(screen.getByRole("button", { name: "Infinite rounds" }));
     const fixedRounds = screen.getByLabelText("Rounds");
 
     await user.clear(courts);
@@ -170,6 +193,27 @@ describe("NewTournamentPage", () => {
     expect(fixedRounds).toHaveValue(null);
     await user.type(fixedRounds, "5");
     expect(fixedRounds).toHaveValue(5);
+  });
+
+  it("uses numeric mobile keypad hints for numeric tournament settings", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Infinite rounds" }));
+
+    for (const label of ["Courts", "Target score", "Rounds"]) {
+      const input = screen.getByLabelText(label);
+
+      expect(input).toHaveAttribute("inputmode", "numeric");
+      expect(input).toHaveAttribute("pattern", "[0-9]*");
+    }
   });
 
   it("shows Americano round guidance for a complete player rotation", async () => {
@@ -189,6 +233,8 @@ describe("NewTournamentPage", () => {
       await user.type(screen.getByPlaceholderText(`Player ${index + 1}`), name);
     }
 
+    await user.click(screen.getByRole("button", { name: "Infinite rounds" }));
+
     expect(screen.getByText("Minimum 3 rounds needed for everyone to play with everyone.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Add" }));
@@ -202,7 +248,30 @@ describe("NewTournamentPage", () => {
     expect(screen.getByText("You can finish the tournament after any number of rounds.")).toBeInTheDocument();
   });
 
-  it("toggles round count into infinite mode from the input button", async () => {
+  it("can switch between tournament modes", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const americano = screen.getByRole("radio", { name: /Americano/ });
+    const mexicano = screen.getByRole("radio", { name: /Mexicano/ });
+
+    expect(americano).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByText("Mexicano"));
+    expect(mexicano).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByText("Americano"));
+    expect(americano).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("defaults round count to infinite and toggles back to fixed rounds", async () => {
     const user = userEvent.setup();
 
     render(
@@ -216,10 +285,6 @@ describe("NewTournamentPage", () => {
     const rounds = screen.getByLabelText("Rounds");
     const infiniteButton = screen.getByRole("button", { name: "Infinite rounds" });
 
-    expect(rounds).toHaveValue(3);
-    expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(infiniteButton);
     expect(rounds).toHaveValue("∞");
     expect(infiniteButton).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("You can finish the tournament after any number of rounds.")).toBeInTheDocument();

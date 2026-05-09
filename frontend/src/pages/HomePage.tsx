@@ -37,55 +37,26 @@ export function HomePage() {
   };
 
   return (
-    <PageShell
-      actions={
-        <Button asChild className="hidden sm:inline-flex">
-          <Link to="/new">
-            <Plus size={17} />
-            New
-          </Link>
-        </Button>
-      }
-    >
+    <PageShell>
       <Seo
         description={DEFAULT_SEO_DESCRIPTION}
         path="/"
         structuredData="webApplication"
         title={DEFAULT_SEO_TITLE}
       />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <section className="space-y-5">
+      <div className="mx-auto max-w-3xl space-y-7">
+        <section className="space-y-4">
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">Tournament rooms</h1>
+            <h1 className="text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
+              Run a padel tournament
+            </h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              Create a room, open a saved room, or enter a code from another player.
+              Padelo creates Americano and Mexicano rounds, tracks scores and standings live, and gives every
+              player a room code to follow along.
             </p>
           </div>
 
-          <Card>
-            <CardContent>
-              <form className="space-y-2" onSubmit={onJoin}>
-                <Label htmlFor="room-code">Room code</Label>
-                <div className="flex gap-2">
-                  <Input
-                    autoCapitalize="characters"
-                    className="h-11 uppercase"
-                    id="room-code"
-                    inputMode="text"
-                    onChange={(event) => setRoomCode(event.target.value)}
-                    placeholder="ABC123"
-                    value={roomCode}
-                  />
-                  <Button className="h-11" type="submit">
-                    <Search size={17} />
-                    Open
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Button asChild className="h-12 w-full sm:hidden">
+          <Button asChild className="h-12 w-full text-base font-semibold sm:w-auto">
             <Link to="/new">
               <Plus size={18} />
               New tournament
@@ -138,6 +109,31 @@ export function HomePage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className="rounded-xl border border-dashed bg-card/50 p-3 sm:p-4">
+          <form className="space-y-2" onSubmit={onJoin}>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label className="text-sm" htmlFor="room-code">
+                Have a room code?
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  autoCapitalize="characters"
+                  className="h-11 min-w-0 flex-1 uppercase"
+                  id="room-code"
+                  inputMode="text"
+                  onChange={(event) => setRoomCode(event.target.value)}
+                  placeholder="ABC123"
+                  value={roomCode}
+                />
+                <Button className="h-11 shrink-0" type="submit" variant="outline">
+                  <Search size={17} />
+                  Open
+                </Button>
+              </div>
+            </div>
+          </form>
         </section>
       </div>
     </PageShell>

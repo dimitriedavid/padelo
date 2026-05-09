@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Copy, Play } from "lucide-react";
+import { Check, Copy, House, Play } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
@@ -71,9 +71,9 @@ export function FinishedTournamentPage() {
   return (
     <PageShell
       actions={
-        <Button asChild size="icon" variant="ghost">
-          <Link title="Back to room" to={`/t/${roomCode}`}>
-            <ArrowLeft size={19} />
+        <Button asChild className="size-11" size="icon" variant="outline">
+          <Link aria-label="Home" title="Home" to="/">
+            <House className="size-5" />
           </Link>
         </Button>
       }

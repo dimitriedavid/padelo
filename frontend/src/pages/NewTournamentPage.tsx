@@ -1,4 +1,4 @@
-import { ArrowLeft, Info, Plus, Trash2 } from "lucide-react";
+import { House, Info, Plus, Trash2 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -55,13 +55,15 @@ export function NewTournamentPage() {
   const [targetScoreInput, setTargetScoreInput] = useState(() =>
     String(prefill?.targetScore ?? DEFAULT_TARGET_SCORE),
   );
-  const [roundMode, setRoundMode] = useState<RoundMode>(prefill?.roundCount.type ?? "fixed");
+  const [roundMode, setRoundMode] = useState<RoundMode>(prefill?.roundCount.type ?? "infinite");
   const [roundValueInput, setRoundValueInput] = useState(() =>
     String(prefill?.roundCount.type === "fixed" ? prefill.roundCount.value : 3),
   );
   const [modeInfo, setModeInfo] = useState<TournamentMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const errorRef = useRef<HTMLDivElement | null>(null);
   const playerInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingPlayerFocusIndex = useRef<number | null>(null);
   const pendingPlayerFocusRequest = useRef<{
@@ -78,7 +80,16 @@ export function NewTournamentPage() {
     playerNames.length >= 4 ? roundsForCompleteAmericanoRotation(playerNames.length) : null;
   const hasValidNumbers =
     courtCount !== null && targetScore !== null && (roundMode === "infinite" || roundValue !== null);
-  const canSubmit = name.trim().length > 0 && playerNames.length >= 4 && hasValidNumbers && !isSubmitting;
+  const isFormValid = name.trim().length > 0 && playerNames.length >= 4 && hasValidNumbers;
+  const canSubmit = isFormValid && !isSubmitting;
+
+  const showValidationError = (message: string) => {
+    setError(message);
+    setValidationAttempt((current) => current + 1);
+    window.requestAnimationFrame(() => {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
 
   useEffect(() => {
     if (hasEditedCourtCount) {
@@ -92,8 +103,18 @@ export function NewTournamentPage() {
     event.preventDefault();
     setError(null);
 
+    if (name.trim().length === 0) {
+      showValidationError("Enter a tournament name.");
+      return;
+    }
+
+    if (playerNames.length < 4) {
+      showValidationError("Add at least 4 players.");
+      return;
+    }
+
     if (courtCount === null || targetScore === null) {
-      setError("Enter valid numbers for courts and target score.");
+      showValidationError("Enter valid numbers for courts and target score.");
       return;
     }
 
@@ -103,7 +124,7 @@ export function NewTournamentPage() {
       roundCount = { type: "infinite" };
     } else {
       if (roundValue === null) {
-        setError("Enter a valid number of rounds.");
+        showValidationError("Enter a valid number of rounds.");
         return;
       }
 
@@ -237,9 +258,9 @@ export function NewTournamentPage() {
   return (
     <PageShell
       actions={
-        <Button asChild size="icon" variant="ghost">
-          <Link title="Back" to="/">
-            <ArrowLeft size={19} />
+        <Button asChild className="size-11" size="icon" variant="outline">
+          <Link aria-label="Home" title="Home" to="/">
+            <House className="size-5" />
           </Link>
         </Button>
       }
@@ -258,7 +279,12 @@ export function NewTournamentPage() {
         </div>
 
         {error ? (
-          <Alert variant="destructive">
+          <Alert
+            className="animate-validation-attention scroll-mt-24"
+            key={`${error}-${validationAttempt}`}
+            ref={errorRef}
+            variant="destructive"
+          >
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -288,25 +314,26 @@ export function NewTournamentPage() {
                   const inputId = `mode-${option.id}`;
 
                   return (
-                    <div
-                      className={cn(
-                        "flex min-h-16 cursor-pointer items-start gap-3 rounded-lg border bg-card px-3 pt-3 pb-2.5 transition-colors",
-                        "hover:bg-secondary/50 focus-within:ring-3 focus-within:ring-ring/50",
-                        active && "border-primary bg-accent text-accent-foreground",
-                      )}
-                      key={option.id}
-                      onClick={() => setMode(option.id)}
-                    >
-                      <RadioGroupItem className="mt-1" id={inputId} value={option.id} />
-                      <Label className="min-w-0 flex-1 cursor-pointer flex-col items-start gap-1" htmlFor={inputId}>
-                        <span className="font-display text-base font-semibold leading-none">
-                          {option.title}
+                    <div className="relative" key={option.id}>
+                      <Label
+                        className={cn(
+                          "flex min-h-16 cursor-pointer items-start gap-3 rounded-lg border bg-card px-3 pt-3 pr-14 pb-2.5 transition-colors",
+                          "hover:bg-secondary/50 focus-within:ring-3 focus-within:ring-ring/50",
+                          active && "border-primary bg-accent text-accent-foreground",
+                        )}
+                        htmlFor={inputId}
+                      >
+                        <RadioGroupItem className="mt-1" id={inputId} value={option.id} />
+                        <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                          <span className="font-display text-base font-semibold leading-none">
+                            {option.title}
+                          </span>
+                          <span className="text-sm text-muted-foreground">{option.description}</span>
                         </span>
-                        <span className="text-sm text-muted-foreground">{option.description}</span>
                       </Label>
                       <Button
                         aria-label={`${option.title} rules`}
-                        className="size-9 shrink-0 rounded-md"
+                        className="absolute top-2 right-2 size-9 shrink-0 rounded-md"
                         onClick={(event) => {
                           event.stopPropagation();
                           setModeInfo(option.id);
@@ -380,11 +407,13 @@ export function NewTournamentPage() {
               <Input
                 className="h-11"
                 id="court-count"
+                inputMode="numeric"
                 min={1}
                 onChange={(event) => {
                   setHasEditedCourtCount(true);
                   setCourtCountInput(event.target.value);
                 }}
+                pattern="[0-9]*"
                 type="number"
                 value={courtCountInput}
               />
@@ -395,8 +424,10 @@ export function NewTournamentPage() {
               <Input
                 className="h-11"
                 id="target-score"
+                inputMode="numeric"
                 min={1}
                 onChange={(event) => setTargetScoreInput(event.target.value)}
+                pattern="[0-9]*"
                 type="number"
                 value={targetScoreInput}
               />
@@ -415,6 +446,7 @@ export function NewTournamentPage() {
                       setRoundValueInput(event.target.value);
                     }
                   }}
+                  pattern={roundMode === "fixed" ? "[0-9]*" : undefined}
                   readOnly={roundMode === "infinite"}
                   type={roundMode === "infinite" ? "text" : "number"}
                   value={roundMode === "infinite" ? "∞" : roundValueInput}
@@ -448,7 +480,12 @@ export function NewTournamentPage() {
         </Card>
 
         <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
-          <Button className="h-11 w-full sm:w-auto" disabled={!canSubmit} type="submit">
+          <Button
+            aria-disabled={!isFormValid || isSubmitting}
+            className={cn("h-11 w-full sm:w-auto", !canSubmit && "opacity-55")}
+            disabled={isSubmitting}
+            type="submit"
+          >
             {isSubmitting ? <Spinner /> : null}
             Create room
           </Button>

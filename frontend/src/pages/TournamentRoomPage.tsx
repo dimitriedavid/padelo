@@ -13,7 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { AppHeader } from "../components/AppHeader";
 import { assignPlayerAvatarColors } from "../components/PadeloBrand";
 import { Scoreboard } from "../components/Scoreboard";
 import { ScoreEntryDrawer } from "../components/ScoreEntryDrawer";
@@ -181,10 +183,8 @@ export function TournamentRoomPage() {
         title={pageTitle}
       />
 
-      {isLoading ? (
-        <div className="grid h-dvh place-items-center bg-background text-primary">
-          <Spinner className="size-6" />
-        </div>
+      {isLoading && !scoreboardTournament ? (
+        <TournamentRoomSkeleton />
       ) : null}
 
       {!isLoading && error ? (
@@ -271,6 +271,60 @@ export function TournamentRoomPage() {
         </>
       ) : null}
     </>
+  );
+}
+
+function TournamentRoomSkeleton() {
+  return (
+    <div className="flex h-dvh w-full flex-col bg-background text-foreground">
+      <AppHeader
+        actions={
+          <>
+            <Skeleton className="h-9 w-36 rounded-md" />
+            <Skeleton className="size-11 rounded-lg" />
+            <Skeleton className="size-11 rounded-lg" />
+          </>
+        }
+        constrained={false}
+        logoHref={null}
+        sticky={false}
+      />
+
+      <div className="px-4 pt-3.5 pb-1.5">
+        <Skeleton className="h-8 w-64 max-w-[75vw]" />
+        <Skeleton className="mt-2 h-5 w-80 max-w-[85vw]" />
+      </div>
+
+      <div className="flex h-12 items-center gap-7 border-b px-4">
+        <Skeleton className="h-5 w-14" />
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-5 w-11" />
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-hidden px-4 py-3">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div className="space-y-3 rounded-2xl border bg-card p-3 shadow-sm" key={index}>
+            <div className="flex items-center gap-2 px-1">
+              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="ml-auto h-6 w-14" />
+            </div>
+            <Skeleton className="h-[106px] rounded-2xl" />
+            <Skeleton className="h-[106px] rounded-2xl" />
+          </div>
+        ))}
+      </div>
+
+      <footer className="flex items-center gap-2 border-t bg-background px-4 py-2 pb-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <Skeleton className="size-10 rounded-lg" />
+          <Skeleton className="size-10 rounded-lg" />
+          <Skeleton className="size-10 rounded-lg" />
+          <Skeleton className="size-10 rounded-lg" />
+        </div>
+        <Skeleton className="size-10 rounded-lg" />
+      </footer>
+    </div>
   );
 }
 
