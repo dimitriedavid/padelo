@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { House, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
@@ -27,7 +27,7 @@ import type {
 } from "../components/scoreboard-types";
 import { Seo } from "../components/Seo";
 import { finishTournament, getTournamentEvents, upsertMatchResult } from "../lib/api";
-import { errorMessage } from "../lib/errors";
+import { errorMessage, TOURNAMENT_NOT_FOUND_MESSAGE } from "../lib/errors";
 import { normalizeRoomInput } from "../lib/tournament";
 import type { MatchResult, Tournament, TournamentEvent } from "../lib/types";
 import { useTournament } from "../lib/useTournament";
@@ -102,6 +102,22 @@ export function TournamentRoomPage() {
     );
   }, [openMatchId, scoreboardTournament]);
 
+  const shouldRedirectHome = !isLoading && !tournament && error === TOURNAMENT_NOT_FOUND_MESSAGE;
+
+  useEffect(() => {
+    if (!shouldRedirectHome) {
+      return;
+    }
+
+    const redirectTimeout = window.setTimeout(() => {
+      navigate("/", { replace: true });
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(redirectTimeout);
+    };
+  }, [navigate, shouldRedirectHome]);
+
   if (!roomCode) {
     return <Navigate replace to="/" />;
   }
@@ -118,12 +134,11 @@ export function TournamentRoomPage() {
   const shareRoom = async () => {
     const url = window.location.href;
 
-    if (navigator.share) {
-      await navigator.share({ title: pageTitle, url });
+    if (!navigator.share) {
       return;
     }
 
-    await navigator.clipboard?.writeText(url);
+    await navigator.share({ title: pageTitle, url });
   };
 
   const submitResult = async (payload: ResultSubmission) => {
@@ -193,10 +208,21 @@ export function TournamentRoomPage() {
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-            <Button className="w-full" onClick={refresh} variant="secondary">
-              <RefreshCw size={16} />
-              Retry
-            </Button>
+            {shouldRedirectHome ? (
+              <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+                Redirecting home in 5 seconds.
+              </div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button className="h-11" onClick={() => navigate("/")} variant="outline">
+                <House size={16} />
+                Home
+              </Button>
+              <Button className="h-11" onClick={refresh} variant="secondary">
+                <RefreshCw size={16} />
+                Retry
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

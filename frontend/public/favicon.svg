@@ -1,7 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Padelo">
-  <rect width="64" height="64" rx="14" fill="#0f8b58" />
+  <rect width="64" height="64" rx="14" fill="#f6f3ec" />
+  <circle cx="32" cy="32" r="23" fill="#2d6a45" />
   <path
-    fill="#fff"
-    d="M20 14h17.5C47 14 53 19.8 53 28.8S47 43.5 37.5 43.5H30v8.5H20V14Zm10 9v11.5h6.9c3.7 0 6-2.2 6-5.7 0-3.6-2.3-5.8-6-5.8H30Z"
+    d="M18 13 C28 21 28 43 18 51"
+    fill="none"
+    stroke="#f6f3ec"
+    stroke-linecap="round"
+    stroke-width="4.25"
+  />
+  <path
+    d="M46 13 C36 21 36 43 46 51"
+    fill="none"
+    stroke="#f6f3ec"
+    stroke-linecap="round"
+    stroke-width="4.25"
   />
 </svg>

@@ -28,6 +28,8 @@ export function saveRecentTournament(tournament: Tournament): RecentRoom[] {
     code: tournament.roomCode,
     name: tournament.name,
     lastOpenedAt: new Date().toISOString(),
+    mode: tournament.config.mode,
+    playerCount: tournament.config.players.length,
     status: tournament.status,
   };
   const rooms = [room, ...getRecentRooms().filter((candidate) => candidate.code !== room.code)].slice(
@@ -55,7 +57,11 @@ function isRecentRoom(value: unknown): value is RecentRoom {
     typeof candidate.code === "string" &&
     typeof candidate.name === "string" &&
     typeof candidate.lastOpenedAt === "string" &&
+    (candidate.mode === undefined || candidate.mode === "americano" || candidate.mode === "mexicano") &&
+    (candidate.playerCount === undefined ||
+      (typeof candidate.playerCount === "number" &&
+        Number.isInteger(candidate.playerCount) &&
+        candidate.playerCount >= 0)) &&
     (candidate.status === "active" || candidate.status === "finished")
   );
 }
-

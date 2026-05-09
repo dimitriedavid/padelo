@@ -16,7 +16,12 @@ describe("recent rooms", () => {
     const rooms = getRecentRooms();
 
     expect(rooms).toHaveLength(2);
-    expect(rooms[0]).toMatchObject({ code: "AAA111", name: "First Updated" });
+    expect(rooms[0]).toMatchObject({
+      code: "AAA111",
+      mode: "americano",
+      name: "First Updated",
+      playerCount: 4,
+    });
     expect(rooms[1]).toMatchObject({ code: "BBB222", name: "Second" });
   });
 });
@@ -59,4 +64,3 @@ function tournament(overrides: Partial<Tournament>): Tournament {
     ...overrides,
   };
 }
-

@@ -16,13 +16,20 @@ export function PadeloBall({ className, color = "currentColor" }: BallProps) {
       className={cn("inline-block align-[-0.06em]", className)}
       viewBox="0 0 100 100"
     >
-      <circle cx="50" cy="50" fill="none" r="44" stroke={color} strokeWidth="9" />
+      <circle cx="50" cy="50" fill={color} r="44" />
       <path
-        d="M 14 32 Q 50 50 14 68"
+        d="M28 14 C44 32 44 68 28 86"
         fill="none"
-        stroke={color}
+        stroke="var(--background)"
         strokeLinecap="round"
-        strokeWidth="7"
+        strokeWidth="8"
+      />
+      <path
+        d="M72 14 C56 32 56 68 72 86"
+        fill="none"
+        stroke="var(--background)"
+        strokeLinecap="round"
+        strokeWidth="8"
       />
     </svg>
   );
@@ -42,7 +49,7 @@ export function PadeloWordmark({ className, ballClassName }: WordmarkProps) {
       )}
     >
       <span>padel</span>
-      <PadeloBall className={cn("size-[0.74em] -ml-[0.04em]", ballClassName)} />
+      <PadeloBall className={cn("size-[0.74em] -ml-[0.01em]", ballClassName)} />
     </span>
   );
 }

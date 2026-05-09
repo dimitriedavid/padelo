@@ -1,7 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import type { Tournament } from "../lib/types";
 import { playerName, sortLeaderboard } from "../lib/tournament";
+import { LeaderboardPanel, type LeaderboardPanelRow } from "./LeaderboardPanel";
+import { assignPlayerAvatarColors } from "./PadeloBrand";
+import type { ScoreboardPlayer } from "./scoreboard-types";
 
 type LeaderboardProps = {
   tournament: Tournament;
@@ -9,34 +10,47 @@ type LeaderboardProps = {
 
 export function Leaderboard({ tournament }: LeaderboardProps) {
   const entries = sortLeaderboard(tournament);
+  const avatarPlayers = assignPlayerAvatarColors(tournament.state.players.map(toAvatarPlayer));
+  const playersById = new Map(avatarPlayers.map((player) => [player.id, player]));
+  const rows: LeaderboardPanelRow[] = entries.map((entry, index) => {
+    const player = playersById.get(entry.playerId) ?? fallbackAvatarPlayer(tournament, entry.playerId);
+    const losses = Math.max(0, entry.played - entry.wins - (entry.ties ?? 0));
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Leaderboard</CardTitle>
-      </CardHeader>
-      <CardContent className="px-0">
-        {entries.map((entry, index) => (
-          <div key={entry.playerId}>
-            {index > 0 ? <Separator /> : null}
-            <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-              <div className="grid h-7 w-7 place-items-center rounded bg-secondary text-sm font-semibold text-primary">
-                {index + 1}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate font-medium text-foreground">{playerName(tournament, entry.playerId)}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  {entry.wins}W {(entry.ties ?? 0)}T {Math.max(0, entry.played - entry.wins - (entry.ties ?? 0))}L
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-display text-2xl leading-none font-bold text-primary">{entry.pointsFor}</div>
-                <div className="text-xs text-muted-foreground">points</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
+    return {
+      id: entry.playerId,
+      name: playerName(tournament, entry.playerId),
+      player,
+      points: entry.pointsFor,
+      rank: index + 1,
+      record: `${entry.wins}W ${(entry.ties ?? 0)}T ${losses}L`,
+    };
+  });
+
+  return <LeaderboardPanel rows={rows} />;
+}
+
+function toAvatarPlayer(player: { id: string; name: string }): ScoreboardPlayer {
+  return {
+    id: player.id,
+    name: player.name,
+    initials: initialsFor(player.name),
+  };
+}
+
+function fallbackAvatarPlayer(tournament: Tournament, playerId: string): ScoreboardPlayer {
+  const name = playerName(tournament, playerId);
+
+  return {
+    id: playerId,
+    name,
+    initials: initialsFor(name),
+  };
+}
+
+function initialsFor(value: string) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const initials =
+    words.length > 1 ? `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}` : value.slice(0, 2);
+
+  return initials.toUpperCase();
 }

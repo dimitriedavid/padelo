@@ -1,5 +1,7 @@
 import { ApiError } from "./api";
 
+export const TOURNAMENT_NOT_FOUND_MESSAGE = "Tournament not found.";
+
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 409) {
@@ -7,7 +9,7 @@ export function errorMessage(error: unknown): string {
     }
 
     if (error.status === 404) {
-      return "Tournament not found.";
+      return TOURNAMENT_NOT_FOUND_MESSAGE;
     }
 
     return error.message || "Request failed.";
@@ -19,4 +21,3 @@ export function errorMessage(error: unknown): string {
 
   return "Something went wrong.";
 }
-

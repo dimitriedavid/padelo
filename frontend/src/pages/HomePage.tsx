@@ -1,4 +1,4 @@
-import { Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { PageShell } from "../components/PageShell";
 import { DEFAULT_SEO_DESCRIPTION, DEFAULT_SEO_TITLE, Seo } from "../components/Seo";
 import { clearRecentRooms, getRecentRooms } from "../lib/recentRooms";
-import { normalizeRoomInput } from "../lib/tournament";
+import { displayMode, normalizeRoomInput } from "../lib/tournament";
 import type { RecentRoom } from "../lib/types";
 
 export function HomePage() {
   const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState("");
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+  const hasRoomCode = normalizeRoomInput(roomCode).length > 0;
 
   useEffect(() => {
     setRecentRooms(getRecentRooms());
@@ -97,9 +99,27 @@ export function HomePage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground">{room.name}</div>
-                          <div className="mt-1 text-sm text-muted-foreground">{room.code}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                            <span>{room.code}</span>
+                            {room.mode && room.playerCount !== undefined ? (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>{displayMode(room.mode)}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{room.playerCount} players</span>
+                              </>
+                            ) : null}
+                          </div>
                         </div>
-                        <Badge className="capitalize" variant="secondary">
+                        <Badge
+                          className={cn(
+                            "capitalize",
+                            room.status === "active"
+                              ? "border-accent bg-accent text-accent-foreground"
+                              : "border-border bg-muted text-muted-foreground",
+                          )}
+                          variant="outline"
+                        >
                           {room.status}
                         </Badge>
                       </div>
@@ -127,9 +147,9 @@ export function HomePage() {
                   placeholder="ABC123"
                   value={roomCode}
                 />
-                <Button className="h-11 shrink-0" type="submit" variant="outline">
-                  <Search size={17} />
-                  Open
+                <Button className="h-11 shrink-0" type="submit" variant={hasRoomCode ? "default" : "outline"}>
+                  <ArrowRight size={17} />
+                  Go
                 </Button>
               </div>
             </div>

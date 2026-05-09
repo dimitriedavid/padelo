@@ -112,5 +112,7 @@ export type RecentRoom = {
   code: string;
   name: string;
   lastOpenedAt: string;
+  mode?: TournamentMode;
+  playerCount?: number;
   status: TournamentStatus;
 };

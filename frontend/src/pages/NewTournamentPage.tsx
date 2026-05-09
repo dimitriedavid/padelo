@@ -20,9 +20,10 @@ import { saveRecentTournament } from "../lib/recentRooms";
 import type { CreateTournamentRequest, RoundCount, TournamentMode } from "../lib/types";
 
 type RoundMode = "fixed" | "infinite";
+type TournamentPrefill = Omit<CreateTournamentRequest, "name"> & { name?: string };
 
 type NewTournamentLocationState = {
-  prefill?: CreateTournamentRequest;
+  prefill?: TournamentPrefill;
   sourceRoomCode?: string;
 };
 
@@ -593,29 +594,29 @@ function dayPartForHour(hour: number) {
   return "Night";
 }
 
-function prefillFromLocationState(state: unknown): CreateTournamentRequest | null {
+function prefillFromLocationState(state: unknown): TournamentPrefill | null {
   if (!isObject(state)) {
     return null;
   }
 
   const locationState = state as NewTournamentLocationState;
 
-  if (!isCreateTournamentRequest(locationState.prefill)) {
+  if (!isTournamentPrefill(locationState.prefill)) {
     return null;
   }
 
   return locationState.prefill;
 }
 
-function isCreateTournamentRequest(value: unknown): value is CreateTournamentRequest {
+function isTournamentPrefill(value: unknown): value is TournamentPrefill {
   if (!isObject(value)) {
     return false;
   }
 
-  const candidate = value as Partial<CreateTournamentRequest>;
+  const candidate = value as Partial<TournamentPrefill>;
 
   return (
-    typeof candidate.name === "string" &&
+    (candidate.name === undefined || typeof candidate.name === "string") &&
     (candidate.mode === "americano" || candidate.mode === "mexicano") &&
     Array.isArray(candidate.players) &&
     candidate.players.every((player) => typeof player === "string") &&

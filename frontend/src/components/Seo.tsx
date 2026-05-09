@@ -1,16 +1,37 @@
 import { useEffect } from "react";
 
-export const DEFAULT_SEO_TITLE = "Padelo | Padel Tournament Scoreboard";
+export const DEFAULT_SEO_TITLE = "Padelo | Padel Tournament Generator for Americano & Mexicano";
 export const DEFAULT_SEO_DESCRIPTION =
-  "Create Americano and Mexicano padel tournaments, share room codes, track live scores, and view leaderboards from any device.";
+  "Eight players and not sure what padel game mode to use? Create Americano or Mexicano rounds, share scores, and track standings live.";
 
 const SITE_NAME = "Padelo";
 const FEATURE_LIST = [
   "Americano and Mexicano padel tournament setup",
+  "Game mode guidance for groups of 4, 8, or more players",
   "Shareable room codes",
   "Live tournament scoreboard",
   "Round and match result tracking",
   "Final leaderboard and results sharing",
+];
+const SEARCH_KEYWORDS = [
+  "padel tournament generator",
+  "padel game mode",
+  "americano padel",
+  "mexicano padel",
+  "8 players padel",
+  "padel scoreboard",
+];
+const FAQ_LIST = [
+  {
+    question: "We are 8 padel players. What game mode should we use?",
+    answer:
+      "Use Americano for a balanced rotating schedule where players change partners, or Mexicano for performance-based rounds where standings shape the next matches.",
+  },
+  {
+    question: "Can Padelo generate fair padel rounds and track scores?",
+    answer:
+      "Yes. Padelo creates Americano and Mexicano rounds, shares a room code, tracks live scores, and keeps standings for every player.",
+  },
 ];
 
 type StructuredDataType = "webApplication" | "webPage";
@@ -125,7 +146,16 @@ function buildStructuredData(
       description,
       applicationCategory: "SportsApplication",
       operatingSystem: "Any",
+      keywords: SEARCH_KEYWORDS.join(", "),
       featureList: FEATURE_LIST,
+      mainEntity: FAQ_LIST.map(({ question, answer }) => ({
+        "@type": "Question",
+        name: question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: answer,
+        },
+      })),
       offers: {
         "@type": "Offer",
         price: "0",

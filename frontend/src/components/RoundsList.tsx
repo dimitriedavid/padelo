@@ -5,19 +5,25 @@ import { playerName } from "../lib/tournament";
 
 type RoundsListProps = {
   tournament: Tournament;
+  title?: string | null;
 };
 
-export function RoundsList({ tournament }: RoundsListProps) {
+export function RoundsList({ tournament, title = "Rounds" }: RoundsListProps) {
+  const rounds =
+    tournament.status === "finished"
+      ? tournament.state.rounds.filter((round) => round.matches.some((match) => match.result))
+      : tournament.state.rounds;
+
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-foreground">Rounds</h2>
+      {title ? <h2 className="text-base font-semibold text-foreground">{title}</h2> : null}
       <div className="grid gap-3">
-        {tournament.state.rounds.map((round) => (
+        {rounds.map((round) => (
           <Card key={round.index}>
             <CardHeader className="grid grid-cols-[1fr_auto] items-center">
               <CardTitle>Round {round.index + 1}</CardTitle>
               <Badge className="capitalize" variant="secondary">
-                {round.status}
+                {tournament.status === "finished" ? "finished" : round.status}
               </Badge>
             </CardHeader>
 

@@ -294,7 +294,10 @@ describe("NewTournamentPage", () => {
     expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("prefills the form from play-again navigation state", () => {
+  it("prefills copied tournament settings while generating a fresh name", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 9, 18));
+
     render(
       <MemoryRouter
         initialEntries={[
@@ -302,7 +305,6 @@ describe("NewTournamentPage", () => {
             pathname: "/new",
             state: {
               prefill: {
-                name: "Friday Rematch",
                 mode: "mexicano",
                 players: ["Alex", "Bianca", "Chris", "Dana", "Eli"],
                 courtCount: 2,
@@ -319,7 +321,7 @@ describe("NewTournamentPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByDisplayValue("Friday Rematch")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Evening Padel - May 9");
     expect(screen.getByPlaceholderText("Player 1")).toHaveValue("Alex");
     expect(screen.getByPlaceholderText("Player 5")).toHaveValue("Eli");
     expect(screen.getByLabelText("Courts")).toHaveValue(2);
