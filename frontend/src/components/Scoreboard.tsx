@@ -351,7 +351,7 @@ export function Scoreboard({
   }, [roundAnnouncement]);
 
   return (
-    <div className="flex h-dvh w-full flex-col bg-background text-foreground">
+    <div className="fixed inset-x-0 top-0 flex h-dvh w-full flex-col overflow-hidden overscroll-none bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <AppHeader
         actions={
           <>
@@ -366,10 +366,9 @@ export function Scoreboard({
         }
         constrained={false}
         logoHref={null}
-        sticky={false}
       />
 
-      <div className="px-4 pt-3.5 pb-1.5">
+      <div className="shrink-0 px-4 pt-3.5 pb-1.5">
         <h1 className="font-display text-[28px] leading-tight font-semibold -tracking-[0.02em]">
           {tournament.name}
         </h1>
@@ -379,9 +378,9 @@ export function Scoreboard({
         </p>
       </div>
 
-      <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setActiveTab} value={activeTab}>
+      <Tabs className="flex min-h-0 flex-1 flex-col overflow-hidden" onValueChange={setActiveTab} value={activeTab}>
         <TabsList
-          className="h-12 w-full justify-start gap-7 rounded-none border-b bg-transparent p-0 px-4"
+          className="h-12 w-full shrink-0 justify-start gap-7 rounded-none border-b bg-transparent p-0 px-4"
           variant="line"
         >
           {[
@@ -403,7 +402,7 @@ export function Scoreboard({
           ))}
         </TabsList>
 
-        <TabsContent className="relative m-0 flex-1 overflow-y-auto px-4 py-3" value="round">
+        <TabsContent className="relative m-0 min-h-0 flex-1 overflow-y-auto px-4 py-3" value="round">
           <div
             className={cn(
               "space-y-2.5 transition-[filter,opacity] duration-200",
@@ -445,11 +444,11 @@ export function Scoreboard({
           ) : null}
         </TabsContent>
 
-        <TabsContent className="m-0 flex-1 overflow-y-auto px-4 py-3" value="standings">
+        <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto px-4 py-3" value="standings">
           <LeaderboardPanel rows={leaderboardRows} showHeader={false} />
         </TabsContent>
 
-        <TabsContent className="m-0 flex-1 space-y-2 overflow-y-auto px-4 py-3" value="logs">
+        <TabsContent className="m-0 min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3" value="logs">
           {log.length > 0 ? (
             log.map((entry, index) => <LogEntry key={`${entry.ago}-${index}`} {...entry} />)
           ) : (
@@ -460,7 +459,7 @@ export function Scoreboard({
         </TabsContent>
       </Tabs>
 
-      <footer className="flex items-center gap-2 border-t bg-background px-4 py-2 pb-3">
+      <footer className="z-20 flex shrink-0 items-center gap-2 border-t bg-background/92 px-4 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
         <RoundPagination
           activeRound={tournament.activeRoundIndex}
           className="min-w-0 flex-1 px-0 pb-0"

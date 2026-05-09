@@ -302,7 +302,7 @@ export function TournamentRoomPage() {
 
 function TournamentRoomSkeleton() {
   return (
-    <div className="flex h-dvh w-full flex-col bg-background text-foreground">
+    <div className="fixed inset-x-0 top-0 flex h-dvh w-full flex-col overflow-hidden overscroll-none bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <AppHeader
         actions={
           <>
