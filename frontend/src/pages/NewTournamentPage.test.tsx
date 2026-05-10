@@ -226,6 +226,33 @@ describe("NewTournamentPage", () => {
     }
   });
 
+  it("blocks court counts above complete groups of four players", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route element={<NewTournamentPage />} path="/new" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const names = ["Alex", "Bianca", "Chris", "Dana"];
+
+    for (const [index, name] of names.entries()) {
+      await user.type(screen.getByPlaceholderText(`Player ${index + 1}`), name);
+    }
+
+    const courts = screen.getByLabelText("Courts");
+    await user.clear(courts);
+    await user.type(courts, "2");
+    await user.click(screen.getByRole("button", { name: /create room/i }));
+
+    expect(screen.getByText("With 4 players, at most 1 court is available.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("shows Americano round guidance for a complete player rotation", async () => {
     const user = userEvent.setup();
 
@@ -304,7 +331,7 @@ describe("NewTournamentPage", () => {
     expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("prefills copied tournament settings while generating a fresh name", () => {
+  it("prefills copied tournament settings while clamping impossible courts", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 9, 18));
 
@@ -334,7 +361,7 @@ describe("NewTournamentPage", () => {
     expect(screen.getByLabelText("Tournament name")).toHaveValue("Saturday Evening Padel");
     expect(screen.getByPlaceholderText("Player 1")).toHaveValue("Alex");
     expect(screen.getByPlaceholderText("Player 5")).toHaveValue("Eli");
-    expect(screen.getByLabelText("Courts")).toHaveValue(2);
+    expect(screen.getByLabelText("Courts")).toHaveValue(1);
     expect(screen.getByLabelText("Target score")).toHaveValue(15);
     expect(screen.getByRole("radio", { name: /Mexicano/ })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText("Rounds")).toHaveValue("∞");

@@ -23,6 +23,19 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
   const courtCount = requireInteger(value.courtCount, "courtCount", 1, MAX_COURTS);
   const roundCount = parseRoundCount(value.roundCount);
   const targetScore = requireInteger(value.targetScore, "targetScore", 1, MAX_TARGET_SCORE);
+  const maxPlayableCourtCount = playableCourtCount(players.length);
+
+  if (courtCount > maxPlayableCourtCount) {
+    throw badRequest(
+      "validation_error",
+      courtCountMessage(players.length, maxPlayableCourtCount),
+      {
+        field: "courtCount",
+        max: maxPlayableCourtCount,
+        playerCount: players.length,
+      },
+    );
+  }
 
   if (name.length === 0) {
     throw badRequest("validation_error", "Tournament name is required.", { field: "name" });
@@ -203,6 +216,17 @@ function parseRoundCount(input: unknown): RoundCount {
   throw badRequest("validation_error", "Round count must be fixed or infinite.", {
     field: "roundCount.type",
   });
+}
+
+function playableCourtCount(playerCount: number): number {
+  return Math.max(1, Math.floor(playerCount / 4));
+}
+
+function courtCountMessage(playerCount: number, maxCourtCount: number): string {
+  const courtNoun = maxCourtCount === 1 ? "court" : "courts";
+  const verb = maxCourtCount === 1 ? "is" : "are";
+
+  return `With ${playerCount} players, at most ${maxCourtCount} ${courtNoun} ${verb} available.`;
 }
 
 function requireObject(input: unknown): Record<string, unknown> {

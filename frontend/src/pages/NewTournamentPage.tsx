@@ -47,8 +47,8 @@ export function NewTournamentPage() {
   const location = useLocation();
   const prefill = prefillFromLocationState(location.state);
   const initialPlayerValues = initialPlayers(prefill?.players);
-  const initialCourtCount =
-    prefill?.courtCount ?? courtCountForPlayerCount(playerNamesFromPlayers(initialPlayerValues).length);
+  const initialPlayerCount = playerNamesFromPlayers(initialPlayerValues).length;
+  const initialCourtCount = initialCourtCountForPlayerCount(prefill?.courtCount, initialPlayerCount);
   const [name, setName] = useState(() => prefill?.name ?? defaultTournamentName());
   const [mode, setMode] = useState<TournamentMode>(prefill?.mode ?? "americano");
   const [players, setPlayers] = useState(() => initialPlayerValues);
@@ -78,6 +78,7 @@ export function NewTournamentPage() {
   const courtCount = positiveIntegerFromInput(courtCountInput);
   const targetScore = positiveIntegerFromInput(targetScoreInput);
   const roundValue = positiveIntegerFromInput(roundValueInput);
+  const maximumCourtCount = courtCountForPlayerCount(playerNames.length);
   const americanoCompleteRotationRounds =
     playerNames.length >= 4 ? roundsForCompleteAmericanoRotation(playerNames.length) : null;
   const hasValidNumbers =
@@ -117,6 +118,11 @@ export function NewTournamentPage() {
 
     if (courtCount === null || targetScore === null) {
       showValidationError("Enter valid numbers for courts and target score.");
+      return;
+    }
+
+    if (courtCount > maximumCourtCount) {
+      showValidationError(courtCountMessage(playerNames.length, maximumCourtCount));
       return;
     }
 
@@ -273,7 +279,7 @@ export function NewTournamentPage() {
         path="/new"
         title="Create a Padel Tournament | Padelo"
       />
-      <form className="mx-auto max-w-3xl space-y-5" onSubmit={onSubmit}>
+      <form className="mx-auto max-w-3xl space-y-5" noValidate onSubmit={onSubmit}>
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">New tournament</h1>
           <p className="text-sm leading-6 text-muted-foreground">
@@ -411,6 +417,7 @@ export function NewTournamentPage() {
                 className="h-11"
                 id="court-count"
                 inputMode="numeric"
+                max={maximumCourtCount}
                 min={1}
                 onChange={(event) => {
                   setHasEditedCourtCount(true);
@@ -552,6 +559,23 @@ function playerNamesFromPlayers(players: string[]) {
 
 function courtCountForPlayerCount(playerCount: number) {
   return Math.max(1, Math.floor(playerCount / 4));
+}
+
+function initialCourtCountForPlayerCount(courtCount: number | undefined, playerCount: number) {
+  const maximumCourtCount = courtCountForPlayerCount(playerCount);
+
+  if (courtCount === undefined || !Number.isInteger(courtCount) || courtCount < 1) {
+    return maximumCourtCount;
+  }
+
+  return Math.min(courtCount, maximumCourtCount);
+}
+
+function courtCountMessage(playerCount: number, maximumCourtCount: number) {
+  const courtNoun = maximumCourtCount === 1 ? "court" : "courts";
+  const verb = maximumCourtCount === 1 ? "is" : "are";
+
+  return `With ${playerCount} players, at most ${maximumCourtCount} ${courtNoun} ${verb} available.`;
 }
 
 function roundsForCompleteAmericanoRotation(playerCount: number) {

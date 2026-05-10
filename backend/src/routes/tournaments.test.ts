@@ -47,6 +47,24 @@ describe("tournament routes", () => {
     assert.equal(body.error, "validation_error");
   });
 
+  it("rejects more courts than complete groups of four players", async () => {
+    const { app } = createTestApp();
+    const response = await app.request("/api/tournaments", {
+      method: "POST",
+      body: JSON.stringify(createRequest({ courtCount: 2 })),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+    const details = requireObject(body.details);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "validation_error");
+    assert.equal(body.message, "With 4 players, at most 1 court is available.");
+    assert.equal(details.field, "courtCount");
+    assert.equal(details.max, 1);
+    assert.equal(details.playerCount, 4);
+  });
+
   it("validates create tournament dates", async () => {
     const { app } = createTestApp();
     const response = await app.request("/api/tournaments", {
