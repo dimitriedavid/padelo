@@ -7,10 +7,11 @@ containers do not publish ports on the Docker host.
 
 ### Network
 
-The production compose file expects an existing external Docker network:
+The production compose file expects these existing external Docker networks:
 
 ```txt
 cloudflared_cloudflare
+main-timescaledb
 ```
 
 The `frontend` and `backend` services join this network with stable aliases:
@@ -20,15 +21,17 @@ padelo-frontend
 padelo-backend
 ```
 
-`postgres` stays on the default Compose network only. The backend can still
-connect to it at `postgres:5432` because both services share that default
-network.
+The `backend` and `migrate` services also join `main-timescaledb` so they can
+reach the shared TimescaleDB/Postgres service over Docker DNS. The database is
+not owned by this Compose file.
 
-If the Cloudflare stack did not already create the network, create it once:
+If the Cloudflare stack did not already create its network, create it once:
 
 ```sh
 docker network create cloudflared_cloudflare
 ```
+
+`main-timescaledb` should be created and owned by the database stack.
 
 ### Tunnel Routes
 
@@ -64,16 +67,23 @@ the edge before they reach the tunnel.
 
 ### Deploy
 
-Copy the environment example and set a real database password:
+Copy the environment example and set the production database URL:
 
 ```sh
 cp .env.example .env
 ```
 
-Start Postgres, run migrations, then start the app containers:
+For the shared TimescaleDB service on `main-timescaledb`, the URL should look
+like this. Replace `timescaledb` if your database container uses a different DNS
+alias on that network.
+
+```txt
+DATABASE_URL=postgres://padelo:change-me@timescaledb:5432/padelo
+```
+
+Run migrations, then start the app containers:
 
 ```sh
-docker compose up -d postgres
 docker compose run --rm --build migrate
 docker compose up -d --build backend frontend
 ```
@@ -88,18 +98,79 @@ Expected `PORTS` entries look like internal container ports only, for example
 `80/tcp` or `8123/tcp`. They should not include host bindings such as
 `0.0.0.0:8080->80/tcp`.
 
-## Development database
+### Migrating From Embedded Postgres
 
-The development database intentionally uses separate `DEV_POSTGRES_*`
-variables, Compose project, and volume from production. It binds to host port
-`5433` by default so a local backend can run without touching the production
-Compose database.
+If production is still running the old Compose-managed `postgres` service, take
+the app offline for writes, dump that database, restore it into the shared
+TimescaleDB/Postgres service on `main-timescaledb`, then deploy this Compose
+change.
 
-Start Postgres only:
+Run these commands before replacing the old Compose file:
 
 ```sh
-docker compose -p padelo-dev -f docker-compose.dev.yml up -d
+docker compose stop frontend backend
+docker compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-acl' > padelo-prod.dump
 ```
+
+Create the target role and database in the shared TimescaleDB/Postgres service:
+
+```sh
+export DB_HOST=timescaledb
+export DB_NAME=padelo
+export DB_USER=padelo
+read -s DB_PASSWORD
+read -s DB_ADMIN_PASSWORD
+
+docker run --rm --network main-timescaledb -e PGPASSWORD="$DB_ADMIN_PASSWORD" postgres:16-alpine \
+  psql -v ON_ERROR_STOP=1 -v db_user="$DB_USER" -v db_password="$DB_PASSWORD" \
+  -h "$DB_HOST" -U postgres -d postgres \
+  -c "create role :\"db_user\" login password :'db_password';"
+
+docker run --rm --network main-timescaledb -e PGPASSWORD="$DB_ADMIN_PASSWORD" postgres:16-alpine \
+  createdb -h "$DB_HOST" -U postgres --owner="$DB_USER" "$DB_NAME"
+```
+
+Restore the dump into the shared database:
+
+```sh
+docker run --rm -i --network main-timescaledb -e PGPASSWORD="$DB_PASSWORD" postgres:16-alpine \
+  pg_restore -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" --clean --if-exists --no-owner --role="$DB_USER" \
+  < padelo-prod.dump
+
+docker run --rm --network main-timescaledb -e PGPASSWORD="$DB_PASSWORD" postgres:16-alpine \
+  psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c 'select 1;'
+```
+
+After deploying this Compose file, set `.env` to the container-facing database
+URL, run migrations, then recreate the app containers and remove the old
+`postgres` orphan container:
+
+```sh
+printf 'DATABASE_URL=postgres://%s:%s@%s:5432/%s\n' "$DB_USER" "$DB_PASSWORD" "$DB_HOST" "$DB_NAME" > .env
+docker compose run --rm --build migrate
+docker compose up -d --build --remove-orphans backend frontend
+docker compose ps
+unset DB_PASSWORD DB_ADMIN_PASSWORD
+```
+
+Do not remove the old `postgres_data` Docker volume until the shared database is
+verified and backed up.
+
+## Local Development Database
+
+Local development uses a host-level PostgreSQL service instead of Docker
+Compose. This lets multiple local apps share one Postgres server while keeping
+their app databases separate.
+
+Create the Padelo role and database once:
+
+```sh
+createuser --login --pwprompt padelo
+createdb --owner=padelo padelo
+```
+
+Use `padelo` as the local role password, or update `backend/.env` after copying
+the example.
 
 Run the backend manually from `backend/`:
 
@@ -110,10 +181,10 @@ pnpm db:migrate
 pnpm run dev
 ```
 
-`backend/.env.example` points at the isolated development database:
+`backend/.env.example` points at the host-level local database:
 
 ```txt
-DATABASE_URL=postgres://padelo:padelo@localhost:5433/padelo
+DATABASE_URL=postgres://padelo:padelo@localhost:5432/padelo
 ```
 
 Run the frontend manually from `frontend/`:
@@ -132,20 +203,7 @@ http://localhost:5173
 The Vite development server proxies `/api` to the backend on `localhost:8123`
 by default.
 
-If you set custom `DEV_POSTGRES_*` values in the root `.env`, update
-`backend/.env` so `DATABASE_URL` uses the same credentials. Do not use
-production `POSTGRES_*` values for the dev compose file.
-
-Stop the development database without deleting its data:
-
-```sh
-docker compose -p padelo-dev -f docker-compose.dev.yml down
-```
-
-Only add `-v` when you intentionally want to delete the local development
-database volume.
-
 ## Environment
 
-Copy `.env.example` to `.env` and change the Postgres password before deploying
-anywhere public.
+Copy `.env.example` to `.env` and set `DATABASE_URL` before deploying anywhere
+public.

@@ -41,13 +41,18 @@ Prerequisites:
 
 - Node.js 22 or compatible.
 - pnpm 10.18.1, preferably via Corepack.
-- Docker, for the local PostgreSQL database.
+- PostgreSQL running on this host. Use a shared local Postgres service for dev
+  apps, with one database and role per app.
 
-Start the development database:
+Create the local app database once:
 
 ```sh
-docker compose -p padelo-dev -f docker-compose.dev.yml up -d
+createuser --login --pwprompt padelo
+createdb --owner=padelo padelo
 ```
+
+Use `padelo` as the local role password, or update `backend/.env` after copying
+the example.
 
 Run the backend:
 
@@ -73,12 +78,6 @@ Backend health check:
 
 ```sh
 curl http://localhost:8123/health
-```
-
-Stop the development database without deleting data:
-
-```sh
-docker compose -p padelo-dev -f docker-compose.dev.yml down
 ```
 
 ## Useful Commands
@@ -113,9 +112,9 @@ pnpm preview
 
 ## Environment
 
-Root `.env` values are used by Docker Compose. Start from `.env.example` and change `POSTGRES_PASSWORD` before public deployment.
+Root `.env` values are used by Docker Compose. Start from `.env.example` and set `DATABASE_URL` to the production database connection string. In production, the backend joins the `main-timescaledb` Docker network, so the database host should be the TimescaleDB container's DNS name on that network.
 
-`backend/.env` is for local backend development. Its example points at the isolated development database on host port `5433`.
+`backend/.env` is for local backend development. Its example points at the shared host-level Postgres service on `localhost:5432`.
 
 ## Deployment
 
