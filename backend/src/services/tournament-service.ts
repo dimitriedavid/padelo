@@ -18,6 +18,7 @@ import type {
   DeleteMatchResultRequest,
   FinishTournamentRequest,
   MatchResult,
+  ReopenTournamentRequest,
   RoundCount,
   TournamentConfig,
   TournamentMatch,
@@ -29,6 +30,7 @@ import type {
 import { badRequest } from "../domain/errors.js";
 
 const ROOM_CODE_ATTEMPTS = 10;
+export const TOURNAMENT_REOPEN_WINDOW_MS = 5 * 60 * 1000;
 
 export type TournamentServiceDependencies = {
   repository: TournamentRepository;
@@ -247,6 +249,43 @@ export class TournamentService {
     });
   }
 
+  async reopenTournament(roomCode: string, request: ReopenTournamentRequest): Promise<TournamentEntity> {
+    const tournament = await this.getTournament(roomCode);
+
+    if (tournament.status !== "finished" || !tournament.finishedAt) {
+      throw conflict("tournament_not_finished", "Only finished tournaments can be reopened.");
+    }
+
+    if (tournament.stateVersion !== request.expectedStateVersion) {
+      throw conflict("state_version_conflict", "Tournament state is stale. Refresh and try again.", {
+        expectedStateVersion: request.expectedStateVersion,
+        currentStateVersion: tournament.stateVersion,
+      });
+    }
+
+    const now = this.now();
+    const reopenableUntil = new Date(tournament.finishedAt.getTime() + TOURNAMENT_REOPEN_WINDOW_MS);
+
+    if (now.getTime() > reopenableUntil.getTime()) {
+      throw conflict("reopen_window_expired", "Finished tournaments can only be reopened within 5 minutes.", {
+        finishedAt: tournament.finishedAt.toISOString(),
+        reopenableUntil: reopenableUntil.toISOString(),
+      });
+    }
+
+    return this.persistStateChange(tournament, {
+      state: normalizeTournamentState(tournament.state),
+      status: "active",
+      finishedAt: null,
+      now,
+      logType: "tournament_reopened",
+      logPayload: {
+        roomCode: tournament.roomCode,
+        finishedAt: tournament.finishedAt.toISOString(),
+      },
+    });
+  }
+
   async playAgain(roomCode: string): Promise<TournamentEntity> {
     const sourceTournament = await this.getTournament(roomCode);
 
@@ -314,7 +353,11 @@ export class TournamentService {
       status: "active" | "finished";
       finishedAt: Date | null;
       now: Date;
-      logType: "match_result_upserted" | "match_result_deleted" | "tournament_finished";
+      logType:
+        | "match_result_upserted"
+        | "match_result_deleted"
+        | "tournament_finished"
+        | "tournament_reopened";
       logPayload: Record<string, unknown>;
     },
   ): Promise<TournamentEntity> {

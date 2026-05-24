@@ -2,6 +2,7 @@ import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
   FinishTournamentRequest,
+  ReopenTournamentRequest,
   Tournament,
   TournamentEvent,
   UpsertMatchResultRequest,
@@ -85,6 +86,18 @@ export async function deleteMatchResult(
 export async function finishTournament(roomCode: string, payload: FinishTournamentRequest): Promise<Tournament> {
   const body = await request<TournamentResponse>(
     `/api/tournaments/${encodeURIComponent(roomCode)}/finish`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+
+  return body.tournament;
+}
+
+export async function reopenTournament(roomCode: string, payload: ReopenTournamentRequest): Promise<Tournament> {
+  const body = await request<TournamentResponse>(
+    `/api/tournaments/${encodeURIComponent(roomCode)}/reopen`,
     {
       method: "POST",
       body: JSON.stringify(payload),

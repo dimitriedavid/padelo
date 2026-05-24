@@ -27,6 +27,7 @@ The frontend calls the backend through same-origin `/api` routes. In development
 | `POST` | `/api/tournaments/:roomCode/matches/:matchId/result` | Create or replace a match result |
 | `DELETE` | `/api/tournaments/:roomCode/matches/:matchId/result` | Clear a match result |
 | `POST` | `/api/tournaments/:roomCode/finish` | Mark a tournament finished |
+| `POST` | `/api/tournaments/:roomCode/reopen` | Reopen a tournament within 5 minutes of finishing |
 | `POST` | `/api/tournaments/:roomCode/play-again` | Create a new tournament from finished settings |
 | `GET` | `/api/tournaments/:roomCode/events` | Fetch durable tournament log events |
 | `GET` | `/api/tournaments/:roomCode/stream` | Open a live server-sent events stream |
@@ -99,6 +100,16 @@ Finish a tournament:
   "expectedStateVersion": 8
 }
 ```
+
+Reopen a recently finished tournament:
+
+```json
+{
+  "expectedStateVersion": 9
+}
+```
+
+Reopen requests are only accepted for 5 minutes after `finishedAt`.
 
 If the expected version is stale, the backend returns a conflict so the client can refresh before writing again.
 

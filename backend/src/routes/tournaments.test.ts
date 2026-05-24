@@ -403,6 +403,68 @@ describe("tournament routes", () => {
     assert.equal(body.error, "state_version_conflict");
   });
 
+  it("reopens a finished tournament within five minutes", async () => {
+    const { app } = createTestApp({ roomCodes: ["ROOM42"] });
+    await createTournament(app);
+    await app.request("/api/tournaments/ROOM42/finish", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 1 }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const reopenResponse = await app.request("/api/tournaments/ROOM42/reopen", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 2 }),
+      headers: { "content-type": "application/json" },
+    });
+    const reopened = requireObject((await readJsonObject(reopenResponse)).tournament);
+
+    assert.equal(reopenResponse.status, 200);
+    assert.equal(reopened.status, "active");
+    assert.equal(reopened.finishedAt, null);
+    assert.equal(reopened.stateVersion, 3);
+
+    const editResponse = await app.request("/api/tournaments/ROOM42/matches/r1m1/result", {
+      method: "POST",
+      body: JSON.stringify({
+        sideAScore: 13,
+        sideBScore: 8,
+        expectedStateVersion: 3,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    assert.equal(editResponse.status, 200);
+  });
+
+  it("rejects reopen requests after the five-minute window", async () => {
+    const timestamps = [
+      new Date("2026-05-07T12:00:00.000Z"),
+      new Date("2026-05-07T12:00:01.000Z"),
+      new Date("2026-05-07T12:05:02.000Z"),
+    ];
+    const { app } = createTestApp({
+      roomCodes: ["ROOM42"],
+      now: () => timestamps.shift() ?? new Date("2026-05-07T12:05:02.000Z"),
+    });
+    await createTournament(app);
+    await app.request("/api/tournaments/ROOM42/finish", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 1 }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const response = await app.request("/api/tournaments/ROOM42/reopen", {
+      method: "POST",
+      body: JSON.stringify({ expectedStateVersion: 2 }),
+      headers: { "content-type": "application/json" },
+    });
+    const body = await readJsonObject(response);
+
+    assert.equal(response.status, 409);
+    assert.equal(body.error, "reopen_window_expired");
+  });
+
   it("creates a play-again tournament from a finished tournament", async () => {
     const { app } = createTestApp({ roomCodes: ["OLD123", "NEW123"] });
     await createTournament(app);

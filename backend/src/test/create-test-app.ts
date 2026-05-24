@@ -10,6 +10,7 @@ export function createTestApp(
     roomCodes?: string[];
     rateLimitPolicies?: Partial<RateLimitPolicies>;
     healthCheck?: HealthCheck;
+    now?: () => Date;
   } = {},
 ) {
   let idCounter = 0;
@@ -28,11 +29,13 @@ export function createTestApp(
       roomCodeCounter += 1;
       return roomCode;
     },
-    now: () => {
-      const date = new Date(Date.UTC(2026, 4, 7, 12, 0, timestampCounter));
-      timestampCounter += 1;
-      return date;
-    },
+    now:
+      options.now ??
+      (() => {
+        const date = new Date(Date.UTC(2026, 4, 7, 12, 0, timestampCounter));
+        timestampCounter += 1;
+        return date;
+      }),
   });
   const app = createApp(
     createAppDependencies({

@@ -471,6 +471,8 @@ function eventText(event: TournamentEvent) {
       return matchId ? `Score cleared for ${matchId}` : "Score cleared";
     case "tournament_finished":
       return "Tournament finished";
+    case "tournament_reopened":
+      return "Tournament reopened";
     case "play_again_created":
       return "Play-again room created";
   }

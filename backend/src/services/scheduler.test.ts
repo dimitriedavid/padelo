@@ -39,6 +39,50 @@ describe("scheduler", () => {
     }
   });
 
+  it("does not restart Americano with the same court matchups after a complete rotation", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 8,
+      }),
+    );
+    const firstRound = state.rounds[0];
+    const eighthRound = state.rounds[7];
+
+    assert.ok(firstRound);
+    assert.ok(eighthRound);
+
+    const firstRoundCourtGroups = new Set(firstRound.matches.map(courtGroupKey));
+
+    for (const courtGroup of eighthRound.matches.map(courtGroupKey)) {
+      assert.equal(firstRoundCourtGroups.has(courtGroup), false, `Repeated court matchup ${courtGroup}`);
+    }
+  });
+
+  it("rotates Americano court assignment for the fixed round-robin player", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 7,
+      }),
+    );
+    const firstPlayerCourts = state.rounds.map((round) => {
+      const match = round.matches.find((candidate) =>
+        [...candidate.sideA, ...candidate.sideB].includes("p1"),
+      );
+
+      assert.ok(match);
+
+      return match.courtNumber;
+    });
+
+    assert.deepEqual([...new Set(firstPlayerCourts)].sort(), [1, 2]);
+  });
+
   it("keeps each Americano player in at most one match per round", () => {
     const state = createInitialTournamentState(
       config({
@@ -268,6 +312,10 @@ function assertRoundHasNoDuplicatePlayers(round: TournamentRound): void {
 
 function partnershipKey(side: [string, string]): string {
   return [...side].sort().join(":");
+}
+
+function courtGroupKey(match: TournamentRound["matches"][number]): string {
+  return [...match.sideA, ...match.sideB].sort().join(":");
 }
 
 function completeFirstMatch(state: TournamentState): TournamentState {

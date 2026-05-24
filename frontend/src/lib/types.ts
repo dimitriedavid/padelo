@@ -101,6 +101,10 @@ export type FinishTournamentRequest = {
   expectedStateVersion: number;
 };
 
+export type ReopenTournamentRequest = {
+  expectedStateVersion: number;
+};
+
 export type TournamentEvent = {
   id: string;
   tournamentId: string;
@@ -109,6 +113,7 @@ export type TournamentEvent = {
     | "match_result_upserted"
     | "match_result_deleted"
     | "tournament_finished"
+    | "tournament_reopened"
     | "play_again_created";
   payload: Record<string, unknown>;
   createdAt: string;

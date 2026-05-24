@@ -3,6 +3,7 @@ import type {
   CreateTournamentRequest,
   DeleteMatchResultRequest,
   FinishTournamentRequest,
+  ReopenTournamentRequest,
   RoundCount,
   TournamentMode,
   UpsertMatchResultRequest,
@@ -113,6 +114,14 @@ export function parseDeleteMatchResultRequest(input: unknown): DeleteMatchResult
 }
 
 export function parseFinishTournamentRequest(input: unknown): FinishTournamentRequest {
+  const value = requireObject(input);
+
+  return {
+    expectedStateVersion: parseExpectedStateVersion(value),
+  };
+}
+
+export function parseReopenTournamentRequest(input: unknown): ReopenTournamentRequest {
   const value = requireObject(input);
 
   return {

@@ -137,6 +137,7 @@ GET    /api/tournaments/:roomCode
 POST   /api/tournaments/:roomCode/matches/:matchId/result
 DELETE /api/tournaments/:roomCode/matches/:matchId/result
 POST   /api/tournaments/:roomCode/finish
+POST   /api/tournaments/:roomCode/reopen
 POST   /api/tournaments/:roomCode/play-again
 GET    /api/tournaments/:roomCode/events
 GET    /api/tournaments/:roomCode/stream

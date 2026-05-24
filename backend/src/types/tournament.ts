@@ -90,9 +90,14 @@ export type FinishTournamentRequest = {
   expectedStateVersion: number;
 };
 
+export type ReopenTournamentRequest = {
+  expectedStateVersion: number;
+};
+
 export type TournamentLogType =
   | "tournament_created"
   | "match_result_upserted"
   | "match_result_deleted"
   | "tournament_finished"
+  | "tournament_reopened"
   | "play_again_created";

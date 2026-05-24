@@ -136,7 +136,9 @@ function generateAmericanoPairs(playerIds: string[], roundIndex: number): [strin
   const playerCount = playerIds.length % 2 === 0 ? playerIds.length : playerIds.length + 1;
   const roundCount = playerCount - 1;
   const normalizedRoundIndex = roundIndex % roundCount;
-  const slots: Array<string | null> = [...playerIds];
+  const cycleIndex = Math.floor(roundIndex / roundCount);
+  const cyclePlayerIds = rotatePlayers(playerIds, cycleIndex);
+  const slots: Array<string | null> = [...cyclePlayerIds];
 
   if (slots.length < playerCount) {
     slots.push(null);
@@ -162,17 +164,22 @@ function createMatchesFromPairs(
   courtCount: number,
   roundIndex: number,
 ): TournamentMatch[] {
-  const playablePairCount = Math.min(courtCount * 2, Math.floor(roundPairs.length / 2) * 2);
-  const playablePairs = roundPairs.slice(0, playablePairCount);
+  const matchPairGroups: Array<[[string, string], [string, string]]> = [];
 
-  return Array.from({ length: playablePairs.length / 2 }, (_, matchIndex) => {
-    const sideA = playablePairs[matchIndex * 2];
-    const sideB = playablePairs[matchIndex * 2 + 1];
+  for (let pairIndex = 0; pairIndex + 1 < roundPairs.length; pairIndex += 2) {
+    const sideA = roundPairs[pairIndex];
+    const sideB = roundPairs[pairIndex + 1];
 
     if (!sideA || !sideB) {
       throw new Error("Cannot create a match without two complete sides.");
     }
 
+    matchPairGroups.push([sideA, sideB]);
+  }
+
+  const playablePairGroups = rotateItems(matchPairGroups, roundIndex).slice(0, courtCount);
+
+  return playablePairGroups.map(([sideA, sideB], matchIndex) => {
     return {
       id: `r${roundIndex + 1}m${matchIndex + 1}`,
       courtNumber: matchIndex + 1,
@@ -250,6 +257,24 @@ function rotatePlayers(playerIds: string[], offset: number): string[] {
     }
 
     return playerId;
+  });
+}
+
+function rotateItems<T>(items: T[], offset: number): T[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const normalizedOffset = offset % items.length;
+
+  return Array.from({ length: items.length }, (_, index) => {
+    const item = items[(index - normalizedOffset + items.length) % items.length];
+
+    if (item === undefined) {
+      throw new Error("Cannot rotate items.");
+    }
+
+    return item;
   });
 }
 

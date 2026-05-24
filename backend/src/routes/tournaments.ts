@@ -19,6 +19,7 @@ import {
   parseCreateTournamentRequest,
   parseDeleteMatchResultRequest,
   parseFinishTournamentRequest,
+  parseReopenTournamentRequest,
   parseUpsertMatchResultRequest,
 } from "../validation/tournaments.js";
 
@@ -115,6 +116,22 @@ export function createTournamentRoutes({
     const roomCode = parseRoomCodeParam(c.req.param("roomCode"));
     const request = parseFinishTournamentRequest(await readJson(c));
     const tournament = await service.finishTournament(roomCode, request);
+    const serializedTournament = serializeTournament(tournament);
+
+    eventHub.publish(tournament.roomCode, {
+      type: "tournament_updated",
+      data: { tournament: serializedTournament },
+    });
+
+    return c.json({ tournament: serializedTournament });
+  });
+
+  routes.post("/:roomCode/reopen", async (c) => {
+    enforceRateLimit(c, rateLimiter, "writeTournament", rateLimitPolicies.writeTournament);
+
+    const roomCode = parseRoomCodeParam(c.req.param("roomCode"));
+    const request = parseReopenTournamentRequest(await readJson(c));
+    const tournament = await service.reopenTournament(roomCode, request);
     const serializedTournament = serializeTournament(tournament);
 
     eventHub.publish(tournament.roomCode, {

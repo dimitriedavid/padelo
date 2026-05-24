@@ -1,4 +1,4 @@
-import { Check, House, ListChecks, Play, Share2 } from "lucide-react";
+import { Check, House, ListChecks, Play, RotateCcw, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
@@ -11,17 +11,23 @@ import { MetadataLine } from "../components/MetadataLine";
 import { PageShell } from "../components/PageShell";
 import { RoundsList } from "../components/RoundsList";
 import { Seo } from "../components/Seo";
-import { TOURNAMENT_NOT_FOUND_MESSAGE } from "../lib/errors";
+import { reopenTournament } from "../lib/api";
+import { errorMessage, TOURNAMENT_NOT_FOUND_MESSAGE } from "../lib/errors";
 import { displayMode, displayRoundCount, formatShortTournamentDate, normalizeRoomInput } from "../lib/tournament";
 import { useTournament } from "../lib/useTournament";
+
+const TOURNAMENT_REOPEN_WINDOW_MS = 5 * 60 * 1000;
 
 export function FinishedTournamentPage() {
   const params = useParams();
   const roomCode = params.roomCode ? normalizeRoomInput(params.roomCode) : undefined;
   const navigate = useNavigate();
-  const { tournament, isLoading, error } = useTournament(roomCode);
+  const { tournament, isLoading, error, setTournament } = useTournament(roomCode);
   const [shareState, setShareState] = useState<"idle" | "shared">("idle");
   const [isRoundsOpen, setIsRoundsOpen] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const shouldRedirectHome = !isLoading && !tournament && error === TOURNAMENT_NOT_FOUND_MESSAGE;
 
   useEffect(() => {
@@ -38,8 +44,25 @@ export function FinishedTournamentPage() {
     };
   }, [navigate, shouldRedirectHome]);
 
+  useEffect(() => {
+    if (!tournament?.finishedAt) {
+      return;
+    }
+
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [tournament?.finishedAt]);
+
   if (!roomCode) {
     return <Navigate replace to="/" />;
+  }
+
+  if (tournament?.status === "active") {
+    return <Navigate replace to={`/t/${tournament.roomCode}`} />;
   }
 
   const pageTitle = tournament ? `${tournament.name} Results | Padelo` : "Padel Tournament Results | Padelo";
@@ -56,6 +79,8 @@ export function FinishedTournamentPage() {
         displayRoundCount(tournament),
       ].filter((item): item is string => Boolean(item))
     : [];
+  const reopenRemainingMs = tournament ? getReopenRemainingMs(tournament.finishedAt, now) : 0;
+  const canReopen = Boolean(tournament && tournament.status === "finished" && reopenRemainingMs > 0);
 
   const shareResults = async () => {
     if (!tournament) {
@@ -96,6 +121,27 @@ export function FinishedTournamentPage() {
         sourceRoomCode: tournament.roomCode,
       },
     });
+  };
+
+  const reopen = async () => {
+    if (!tournament || isReopening || !canReopen) {
+      return;
+    }
+
+    setReopenError(null);
+    setIsReopening(true);
+
+    try {
+      const next = await reopenTournament(tournament.roomCode, {
+        expectedStateVersion: tournament.stateVersion,
+      });
+      setTournament(next);
+      navigate(`/t/${next.roomCode}`);
+    } catch (caught) {
+      setReopenError(errorMessage(caught));
+    } finally {
+      setIsReopening(false);
+    }
   };
 
   return (
@@ -151,11 +197,29 @@ export function FinishedTournamentPage() {
 
           <Leaderboard tournament={tournament} />
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          {reopenError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{reopenError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className={canReopen ? "grid gap-2 sm:grid-cols-4" : "grid gap-2 sm:grid-cols-3"}>
             <Button className="h-12 text-base font-semibold" onClick={shareResults}>
               {shareState === "idle" ? <Share2 className="size-5" /> : <Check className="size-5" />}
               {shareState === "shared" ? "Shared" : "Share results"}
             </Button>
+            {canReopen ? (
+              <Button
+                className="h-12 text-base font-semibold"
+                disabled={isReopening}
+                onClick={reopen}
+                variant="secondary"
+              >
+                {isReopening ? <Spinner className="size-4" /> : <RotateCcw className="size-5" />}
+                Reopen
+                <span className="text-sm font-semibold opacity-70">{formatReopenRemaining(reopenRemainingMs)}</span>
+              </Button>
+            ) : null}
             <Button className="h-12 text-base font-semibold" onClick={onPlayAgain} variant="secondary">
               <Play className="size-5" />
               Play again
@@ -187,4 +251,30 @@ export function FinishedTournamentPage() {
 
 function isAbortError(value: unknown) {
   return value instanceof DOMException && value.name === "AbortError";
+}
+
+function getReopenRemainingMs(finishedAt: string | null, now: number) {
+  if (!finishedAt) {
+    return 0;
+  }
+
+  const finishedAtMs = new Date(finishedAt).getTime();
+
+  if (!Number.isFinite(finishedAtMs)) {
+    return 0;
+  }
+
+  return Math.max(0, finishedAtMs + TOURNAMENT_REOPEN_WINDOW_MS - now);
+}
+
+function formatReopenRemaining(remainingMs: number) {
+  const totalSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+
+  return `${seconds}s`;
 }
