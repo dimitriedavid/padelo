@@ -10,6 +10,7 @@ export type TournamentConfig = {
   name: string;
   date?: string;
   mode: TournamentMode;
+  scheduleSeed?: string;
   targetScore: number;
   courtCount: number;
   roundCount: RoundCount;

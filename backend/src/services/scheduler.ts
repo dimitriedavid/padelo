@@ -13,9 +13,9 @@ export function createInitialTournamentState(config: TournamentConfig): Tourname
   const rounds =
     config.mode === "americano" && roundLimit !== null
       ? Array.from({ length: roundLimit }, (_, index) =>
-          generateAmericanoRound(config.players, config.courtCount, index),
+          generateAmericanoRound(config.players, config.courtCount, index, config.scheduleSeed),
         )
-      : [generateAmericanoRound(config.players, config.courtCount, 0)];
+      : [generateAmericanoRound(config.players, config.courtCount, 0, config.scheduleSeed)];
 
   return normalizeTournamentState({
     targetScore: config.targetScore,
@@ -47,7 +47,7 @@ export function maybeAppendNextRound(
   const nextRound =
     config.mode === "mexicano"
       ? generateMexicanoRound(config, normalizedState, nextRoundIndex)
-      : generateAmericanoRound(config.players, config.courtCount, nextRoundIndex);
+      : generateAmericanoRound(config.players, config.courtCount, nextRoundIndex, config.scheduleSeed);
 
   return normalizeTournamentState({
     ...normalizedState,
@@ -91,16 +91,30 @@ export function isRoundComplete(round: TournamentRound): boolean {
   return round.matches.length > 0 && round.matches.every((match) => match.result !== null);
 }
 
+function orderAmericanoPlayerIds(playerIds: string[], scheduleSeed: string | undefined): string[] {
+  if (!scheduleSeed) {
+    return [...playerIds];
+  }
+
+  return shuffleItems(playerIds, `${scheduleSeed}:${playerIds.join("|")}`);
+}
+
 function generateAmericanoRound(
   players: TournamentPlayer[],
   courtCount: number,
   roundIndex: number,
+  scheduleSeed?: string,
 ): TournamentRound {
-  const roundPairs = generateAmericanoPairs(
+  const playerIds = orderAmericanoPlayerIds(
     players.map((player) => player.id),
-    roundIndex,
+    scheduleSeed,
   );
-  const matches = createMatchesFromPairs(roundPairs, courtCount, roundIndex);
+  const roundCycle = americanoRoundCycle(playerIds.length, roundIndex);
+  const roundPairs = generateAmericanoPairs(
+    playerIds,
+    roundCycle.partnershipRoundIndex,
+  );
+  const matches = createMatchesFromPairs(roundPairs, courtCount, roundIndex, roundCycle.matchingIndex);
   const playingPlayerIds = new Set(
     matches.flatMap((match) => [...match.sideA, ...match.sideB]),
   );
@@ -135,10 +149,8 @@ function generateMexicanoRound(
 function generateAmericanoPairs(playerIds: string[], roundIndex: number): [string, string][] {
   const playerCount = playerIds.length % 2 === 0 ? playerIds.length : playerIds.length + 1;
   const roundCount = playerCount - 1;
-  const normalizedRoundIndex = roundIndex % roundCount;
-  const cycleIndex = Math.floor(roundIndex / roundCount);
-  const cyclePlayerIds = rotatePlayers(playerIds, cycleIndex);
-  const slots: Array<string | null> = [...cyclePlayerIds];
+  const normalizedRoundIndex = positiveModulo(roundIndex, roundCount);
+  const slots: Array<string | null> = [...playerIds];
 
   if (slots.length < playerCount) {
     slots.push(null);
@@ -163,21 +175,10 @@ function createMatchesFromPairs(
   roundPairs: [string, string][],
   courtCount: number,
   roundIndex: number,
+  matchingIndex: number,
 ): TournamentMatch[] {
-  const matchPairGroups: Array<[[string, string], [string, string]]> = [];
-
-  for (let pairIndex = 0; pairIndex + 1 < roundPairs.length; pairIndex += 2) {
-    const sideA = roundPairs[pairIndex];
-    const sideB = roundPairs[pairIndex + 1];
-
-    if (!sideA || !sideB) {
-      throw new Error("Cannot create a match without two complete sides.");
-    }
-
-    matchPairGroups.push([sideA, sideB]);
-  }
-
-  const playablePairGroups = rotateItems(matchPairGroups, roundIndex).slice(0, courtCount);
+  const matchPairGroups = createMatchPairGroups(roundPairs, matchingIndex);
+  const playablePairGroups = rotateItems(matchPairGroups, roundIndex + matchingIndex).slice(0, courtCount);
 
   return playablePairGroups.map(([sideA, sideB], matchIndex) => {
     return {
@@ -188,6 +189,60 @@ function createMatchesFromPairs(
       result: null,
     };
   });
+}
+
+function americanoRoundCycle(
+  playerCount: number,
+  roundIndex: number,
+): { partnershipRoundIndex: number; matchingIndex: number } {
+  const roundCount = (playerCount % 2 === 0 ? playerCount : playerCount + 1) - 1;
+  const cycleIndex = Math.floor(roundIndex / roundCount);
+
+  return {
+    partnershipRoundIndex: positiveModulo(roundIndex + cycleIndex, roundCount),
+    matchingIndex: cycleIndex,
+  };
+}
+
+function createMatchPairGroups(
+  roundPairs: [string, string][],
+  matchingIndex: number,
+): Array<[[string, string], [string, string]]> {
+  const slotCount = roundPairs.length % 2 === 0 ? roundPairs.length : roundPairs.length + 1;
+  const slots: Array<number | null> = roundPairs.map((_, index) => index);
+
+  if (slots.length < slotCount) {
+    slots.push(null);
+  }
+
+  const matchingRoundCount = Math.max(1, slotCount - 1);
+  const matchingOffset = positiveModulo(slotCount - 2 + matchingIndex, matchingRoundCount);
+  const matchedSlots = rotateRoundRobinSlots(slots, matchingOffset);
+  const matchPairGroups: Array<[[string, string], [string, string]]> = [];
+
+  for (let index = 0; index < slotCount / 2; index += 1) {
+    const leftIndex = matchedSlots[index];
+    const rightIndex = matchedSlots[slotCount - 1 - index];
+
+    if (leftIndex === undefined || rightIndex === undefined) {
+      throw new Error("Cannot create matches without pair slots.");
+    }
+
+    if (leftIndex === null || rightIndex === null) {
+      continue;
+    }
+
+    const sideA = roundPairs[leftIndex];
+    const sideB = roundPairs[rightIndex];
+
+    if (!sideA || !sideB) {
+      throw new Error("Cannot create a match without two complete sides.");
+    }
+
+    matchPairGroups.push([sideA, sideB]);
+  }
+
+  return matchPairGroups;
 }
 
 function createMexicanoMatchesFromOrderedPlayers(
@@ -230,7 +285,7 @@ function rotateRoundRobinSlots<T>(slots: T[], offset: number): T[] {
 
   const [fixed, ...rotating] = slots;
 
-  if (!fixed) {
+  if (fixed === undefined || fixed === null) {
     throw new Error("Cannot generate rounds without players.");
   }
 
@@ -248,24 +303,12 @@ function rotateRoundRobinSlots<T>(slots: T[], offset: number): T[] {
   ];
 }
 
-function rotatePlayers(playerIds: string[], offset: number): string[] {
-  return Array.from({ length: playerIds.length }, (_, index) => {
-    const playerId = playerIds[(index + offset) % playerIds.length];
-
-    if (!playerId) {
-      throw new Error("Cannot generate rounds without players.");
-    }
-
-    return playerId;
-  });
-}
-
 function rotateItems<T>(items: T[], offset: number): T[] {
   if (items.length === 0) {
     return [];
   }
 
-  const normalizedOffset = offset % items.length;
+  const normalizedOffset = positiveModulo(offset, items.length);
 
   return Array.from({ length: items.length }, (_, index) => {
     const item = items[(index - normalizedOffset + items.length) % items.length];
@@ -276,6 +319,54 @@ function rotateItems<T>(items: T[], offset: number): T[] {
 
     return item;
   });
+}
+
+function shuffleItems<T>(items: T[], seed: string): T[] {
+  const shuffled = [...items];
+  const random = seededRandom(hashString(seed));
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    const current = shuffled[index];
+    const replacement = shuffled[swapIndex];
+
+    if (current === undefined || replacement === undefined) {
+      throw new Error("Cannot shuffle missing items.");
+    }
+
+    shuffled[index] = replacement;
+    shuffled[swapIndex] = current;
+  }
+
+  return shuffled;
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function seededRandom(seed: number): () => number {
+  let state = seed;
+
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function positiveModulo(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 function asFour<T>(items: T[]): [T, T, T, T] {

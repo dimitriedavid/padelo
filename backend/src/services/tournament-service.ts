@@ -54,10 +54,12 @@ export class TournamentService {
 
   async createTournament(request: CreateTournamentRequest): Promise<TournamentEntity> {
     const players = createPlayers(request.players);
+    const createdAt = this.now();
     const config: TournamentConfig = {
       name: request.name,
       date: request.date,
       mode: request.mode,
+      scheduleSeed: createdAt.toISOString(),
       targetScore: request.targetScore,
       courtCount: request.courtCount,
       roundCount: normalizeRoundCount(request.roundCount),
@@ -73,7 +75,6 @@ export class TournamentService {
         continue;
       }
 
-      const createdAt = this.now();
       const tournamentInput: CreateTournamentInput = {
         id: this.id(),
         roomCode,

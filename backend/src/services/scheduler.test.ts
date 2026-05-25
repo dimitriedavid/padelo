@@ -61,6 +61,83 @@ describe("scheduler", () => {
     }
   });
 
+  it("does not repeat the previous Americano round after a complete rotation", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 8,
+      }),
+    );
+    const seventhRound = state.rounds[6];
+    const eighthRound = state.rounds[7];
+
+    assert.ok(seventhRound);
+    assert.ok(eighthRound);
+
+    const seventhRoundCourtGroups = new Set(seventhRound.matches.map(courtGroupKey));
+
+    for (const courtGroup of eighthRound.matches.map(courtGroupKey)) {
+      assert.equal(seventhRoundCourtGroups.has(courtGroup), false, `Repeated court matchup ${courtGroup}`);
+    }
+  });
+
+  it("changes opponents for repeated Americano partnerships after a complete rotation", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 8,
+      }),
+    );
+    const eighthRound = state.rounds[7];
+
+    assert.ok(eighthRound);
+    assertRepeatedPartnershipsChangeOpponents(state.rounds.slice(0, 7), eighthRound);
+  });
+
+  it("does not give players the same opponent pair in consecutive Americano rounds after rotation", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 8,
+      }),
+    );
+    const seventhRound = state.rounds[6];
+    const eighthRound = state.rounds[7];
+
+    assert.ok(seventhRound);
+    assert.ok(eighthRound);
+    assertNoRepeatedPlayerOpponents(seventhRound, eighthRound);
+  });
+
+  it("uses the Americano schedule seed to vary matchups for the same player order", () => {
+    const first = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 7,
+        scheduleSeed: "2026-05-24T17:00:00.000Z",
+      }),
+    );
+    const second = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(8),
+        courtCount: 2,
+        roundCount: 7,
+        scheduleSeed: "2026-06-01T17:00:00.000Z",
+      }),
+    );
+
+    assert.notDeepEqual(roundSignature(first.rounds), roundSignature(second.rounds));
+  });
+
   it("rotates Americano court assignment for the fixed round-robin player", () => {
     const state = createInitialTournamentState(
       config({
@@ -252,13 +329,13 @@ function config(overrides: {
   roundCount: number | "infinite";
   players?: string[];
   courtCount?: number;
+  scheduleSeed?: string;
 }): TournamentConfig {
   const players = (overrides.players ?? ["A", "B", "C", "D"]).map<TournamentPlayer>((name, index) => ({
     id: `p${index + 1}`,
     name,
   }));
-
-  return {
+  const config: TournamentConfig = {
     name: "Test Tournament",
     mode: overrides.mode,
     targetScore: 21,
@@ -269,6 +346,12 @@ function config(overrides: {
         : { type: "fixed", value: overrides.roundCount },
     players,
   };
+
+  if (overrides.scheduleSeed !== undefined) {
+    config.scheduleSeed = overrides.scheduleSeed;
+  }
+
+  return config;
 }
 
 function names(count: number): string[] {
@@ -310,12 +393,104 @@ function assertRoundHasNoDuplicatePlayers(round: TournamentRound): void {
   assert.equal(players.length, new Set(players).size);
 }
 
+function assertRepeatedPartnershipsChangeOpponents(
+  previousRounds: TournamentRound[],
+  nextRound: TournamentRound,
+): void {
+  const previousPartnerships = new Map<string, PartnershipMatchContext>();
+
+  for (const round of previousRounds) {
+    for (const [partnership, context] of partnershipMatchContexts(round)) {
+      previousPartnerships.set(partnership, context);
+    }
+  }
+
+  for (const [partnership, context] of partnershipMatchContexts(nextRound)) {
+    const previousContext = previousPartnerships.get(partnership);
+
+    if (!previousContext) {
+      continue;
+    }
+
+    assert.notEqual(
+      context.opponentPartnership,
+      previousContext.opponentPartnership,
+      `Partnership ${partnership} repeated opponents ${context.opponentPartnership}`,
+    );
+  }
+}
+
+function assertNoRepeatedPlayerOpponents(previousRound: TournamentRound, nextRound: TournamentRound): void {
+  const previousContexts = playerMatchContexts(previousRound);
+
+  for (const [playerId, context] of playerMatchContexts(nextRound)) {
+    const previousContext = previousContexts.get(playerId);
+
+    if (!previousContext) {
+      continue;
+    }
+
+    assert.notDeepEqual(
+      context.opponents,
+      previousContext.opponents,
+      `Player ${playerId} repeated opponents ${context.opponents.join(":")}`,
+    );
+  }
+}
+
 function partnershipKey(side: [string, string]): string {
   return [...side].sort().join(":");
 }
 
 function courtGroupKey(match: TournamentRound["matches"][number]): string {
   return [...match.sideA, ...match.sideB].sort().join(":");
+}
+
+type PartnershipMatchContext = {
+  opponentPartnership: string;
+};
+
+function partnershipMatchContexts(round: TournamentRound): Map<string, PartnershipMatchContext> {
+  const contexts = new Map<string, PartnershipMatchContext>();
+
+  for (const match of round.matches) {
+    const sideA = partnershipKey(match.sideA);
+    const sideB = partnershipKey(match.sideB);
+
+    contexts.set(sideA, { opponentPartnership: sideB });
+    contexts.set(sideB, { opponentPartnership: sideA });
+  }
+
+  return contexts;
+}
+
+type PlayerMatchContext = {
+  opponents: string[];
+};
+
+function playerMatchContexts(round: TournamentRound): Map<string, PlayerMatchContext> {
+  const contexts = new Map<string, PlayerMatchContext>();
+
+  for (const match of round.matches) {
+    for (const playerId of match.sideA) {
+      contexts.set(playerId, { opponents: [...match.sideB].sort() });
+    }
+
+    for (const playerId of match.sideB) {
+      contexts.set(playerId, { opponents: [...match.sideA].sort() });
+    }
+  }
+
+  return contexts;
+}
+
+function roundSignature(rounds: TournamentRound[]): string[] {
+  return rounds.flatMap((round) =>
+    round.matches.map(
+      (match) =>
+        `${round.index}:${match.courtNumber}:${partnershipKey(match.sideA)}:${partnershipKey(match.sideB)}`,
+    ),
+  );
 }
 
 function completeFirstMatch(state: TournamentState): TournamentState {

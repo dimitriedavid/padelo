@@ -22,6 +22,7 @@ describe("tournament routes", () => {
     assert.equal(createResponse.status, 201);
     assert.equal(tournament.roomCode, "ABC123");
     assert.equal(config.date, "2026-05-09");
+    assert.equal(config.scheduleSeed, "2026-05-07T12:00:00.000Z");
     assert.equal(tournament.stateVersion, 1);
     assert.equal(tournament.status, "active");
     assert.equal(rounds.length, 2);
