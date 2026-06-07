@@ -296,7 +296,7 @@ function CourtCard({
     <div
       aria-label={`${editable ? (pending ? "Enter" : "Edit") : "View"} score for court ${match.courtNumber}`}
       className={cn(
-        "flex touch-manipulation flex-col gap-2.5 rounded-2xl border bg-card p-3 shadow-sm transition-colors",
+        "flex touch-pan-y flex-col gap-2.5 rounded-2xl border bg-card p-3 shadow-sm transition-colors",
         editable
           ? "cursor-pointer hover:bg-card/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none active:bg-muted/60"
           : "cursor-default",
