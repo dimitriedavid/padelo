@@ -12,9 +12,7 @@ export function createInitialTournamentState(config: TournamentConfig): Tourname
   const roundLimit = resolveRoundLimit(config.roundCount);
   const rounds =
     config.mode === "americano" && roundLimit !== null
-      ? Array.from({ length: roundLimit }, (_, index) =>
-          generateAmericanoRound(config.players, config.courtCount, index, config.scheduleSeed),
-        )
+      ? generateAmericanoRounds(config.players, config.courtCount, roundLimit, config.scheduleSeed)
       : [generateAmericanoRound(config.players, config.courtCount, 0, config.scheduleSeed)];
 
   return normalizeTournamentState({
@@ -47,7 +45,13 @@ export function maybeAppendNextRound(
   const nextRound =
     config.mode === "mexicano"
       ? generateMexicanoRound(config, normalizedState, nextRoundIndex)
-      : generateAmericanoRound(config.players, config.courtCount, nextRoundIndex, config.scheduleSeed);
+      : generateAmericanoRound(
+          config.players,
+          config.courtCount,
+          nextRoundIndex,
+          config.scheduleSeed,
+          normalizedState.rounds,
+        );
 
   return normalizeTournamentState({
     ...normalizedState,
@@ -104,6 +108,7 @@ function generateAmericanoRound(
   courtCount: number,
   roundIndex: number,
   scheduleSeed?: string,
+  previousRounds: TournamentRound[] = [],
 ): TournamentRound {
   const playerIds = orderAmericanoPlayerIds(
     players.map((player) => player.id),
@@ -114,7 +119,13 @@ function generateAmericanoRound(
     playerIds,
     roundCycle.partnershipRoundIndex,
   );
-  const matches = createMatchesFromPairs(roundPairs, courtCount, roundIndex, roundCycle.matchingIndex);
+  const matches = createMatchesFromPairs(
+    roundPairs,
+    courtCount,
+    roundIndex,
+    roundCycle.matchingIndex,
+    previousRounds,
+  );
   const playingPlayerIds = new Set(
     matches.flatMap((match) => [...match.sideA, ...match.sideB]),
   );
@@ -127,6 +138,21 @@ function generateAmericanoRound(
       .filter((playerId) => !playingPlayerIds.has(playerId)),
     matches,
   };
+}
+
+function generateAmericanoRounds(
+  players: TournamentPlayer[],
+  courtCount: number,
+  roundCount: number,
+  scheduleSeed?: string,
+): TournamentRound[] {
+  const rounds: TournamentRound[] = [];
+
+  for (let index = 0; index < roundCount; index += 1) {
+    rounds.push(generateAmericanoRound(players, courtCount, index, scheduleSeed, rounds));
+  }
+
+  return rounds;
 }
 
 function generateMexicanoRound(
@@ -176,9 +202,15 @@ function createMatchesFromPairs(
   courtCount: number,
   roundIndex: number,
   matchingIndex: number,
+  previousRounds: TournamentRound[] = [],
 ): TournamentMatch[] {
-  const matchPairGroups = createMatchPairGroups(roundPairs, matchingIndex);
-  const playablePairGroups = rotateItems(matchPairGroups, roundIndex + matchingIndex).slice(0, courtCount);
+  const playablePairGroups = createBalancedMatchPairGroups(
+    roundPairs,
+    courtCount,
+    roundIndex,
+    matchingIndex,
+    previousRounds,
+  );
 
   return playablePairGroups.map(([sideA, sideB], matchIndex) => {
     return {
@@ -204,7 +236,66 @@ function americanoRoundCycle(
   };
 }
 
-function createMatchPairGroups(
+function createBalancedMatchPairGroups(
+  roundPairs: [string, string][],
+  courtCount: number,
+  roundIndex: number,
+  matchingIndex: number,
+  previousRounds: TournamentRound[],
+): Array<[[string, string], [string, string]]> {
+  const groupCount = Math.min(courtCount, Math.floor(roundPairs.length / 2));
+
+  if (groupCount === 0) {
+    return [];
+  }
+
+  const opponentCounts = collectOpponentCounts(previousRounds);
+  const previousCourtGroups = collectCourtGroups(previousRounds);
+  const preferredGroups = rotateItems(createRoundRobinMatchPairGroups(roundPairs, matchingIndex), roundIndex + matchingIndex);
+  const preferredOrder = new Map(
+    preferredGroups.map(([sideA, sideB], index) => [matchPairGroupKey(sideA, sideB), index]),
+  );
+  const candidates = createMatchPairGroupCandidates(roundPairs, opponentCounts, previousCourtGroups, preferredOrder);
+  const beamWidth = 128;
+  let states: MatchPairGroupSearchState[] = [{ groups: [], usedPairIndexes: new Set(), score: 0, orderKey: "" }];
+
+  for (let index = 0; index < groupCount; index += 1) {
+    const nextStates: MatchPairGroupSearchState[] = [];
+
+    for (const state of states) {
+      for (const candidate of candidates) {
+        if (
+          state.usedPairIndexes.has(candidate.leftIndex) ||
+          state.usedPairIndexes.has(candidate.rightIndex)
+        ) {
+          continue;
+        }
+
+        const usedPairIndexes = new Set(state.usedPairIndexes);
+        usedPairIndexes.add(candidate.leftIndex);
+        usedPairIndexes.add(candidate.rightIndex);
+        nextStates.push({
+          groups: [...state.groups, [candidate.sideA, candidate.sideB]],
+          usedPairIndexes,
+          score: state.score + candidate.score,
+          orderKey: `${state.orderKey}:${candidate.order}`,
+        });
+      }
+    }
+
+    states = nextStates.sort(compareMatchPairGroupSearchStates).slice(0, beamWidth);
+  }
+
+  const [best] = states;
+
+  if (!best) {
+    return [];
+  }
+
+  return best.groups;
+}
+
+function createRoundRobinMatchPairGroups(
   roundPairs: [string, string][],
   matchingIndex: number,
 ): Array<[[string, string], [string, string]]> {
@@ -243,6 +334,135 @@ function createMatchPairGroups(
   }
 
   return matchPairGroups;
+}
+
+type MatchPairGroupCandidate = {
+  leftIndex: number;
+  rightIndex: number;
+  sideA: [string, string];
+  sideB: [string, string];
+  score: number;
+  order: number;
+};
+
+type MatchPairGroupSearchState = {
+  groups: Array<[[string, string], [string, string]]>;
+  usedPairIndexes: Set<number>;
+  score: number;
+  orderKey: string;
+};
+
+function createMatchPairGroupCandidates(
+  roundPairs: [string, string][],
+  opponentCounts: Map<string, number>,
+  previousCourtGroups: Set<string>,
+  preferredOrder: Map<string, number>,
+): MatchPairGroupCandidate[] {
+  const candidates: MatchPairGroupCandidate[] = [];
+
+  for (let leftIndex = 0; leftIndex < roundPairs.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < roundPairs.length; rightIndex += 1) {
+      const sideA = roundPairs[leftIndex];
+      const sideB = roundPairs[rightIndex];
+
+      if (!sideA || !sideB) {
+        throw new Error("Cannot create a match without two complete sides.");
+      }
+
+      const key = matchPairGroupKey(sideA, sideB);
+      const repeatedCourtGroupPenalty = previousCourtGroups.has(courtGroupKey(sideA, sideB)) ? 100 : 0;
+
+      candidates.push({
+        leftIndex,
+        rightIndex,
+        sideA,
+        sideB,
+        score: opponentRepeatCost(sideA, sideB, opponentCounts) + repeatedCourtGroupPenalty,
+        order: preferredOrder.get(key) ?? roundPairs.length * roundPairs.length + candidates.length,
+      });
+    }
+  }
+
+  return candidates.sort((first, second) => {
+    if (first.score !== second.score) {
+      return first.score - second.score;
+    }
+
+    return first.order - second.order;
+  });
+}
+
+function compareMatchPairGroupSearchStates(
+  first: MatchPairGroupSearchState,
+  second: MatchPairGroupSearchState,
+): number {
+  if (first.score !== second.score) {
+    return first.score - second.score;
+  }
+
+  return first.orderKey.localeCompare(second.orderKey);
+}
+
+function collectOpponentCounts(rounds: TournamentRound[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const round of rounds) {
+    for (const match of round.matches) {
+      for (const playerId of match.sideA) {
+        for (const opponentId of match.sideB) {
+          const key = playerPairKey(playerId, opponentId);
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  return counts;
+}
+
+function collectCourtGroups(rounds: TournamentRound[]): Set<string> {
+  const groups = new Set<string>();
+
+  for (const round of rounds) {
+    for (const match of round.matches) {
+      groups.add(courtGroupKey(match.sideA, match.sideB));
+    }
+  }
+
+  return groups;
+}
+
+function opponentRepeatCost(
+  sideA: [string, string],
+  sideB: [string, string],
+  opponentCounts: Map<string, number>,
+): number {
+  let cost = 0;
+
+  for (const playerId of sideA) {
+    for (const opponentId of sideB) {
+      const previousCount = opponentCounts.get(playerPairKey(playerId, opponentId)) ?? 0;
+      cost += previousCount * 2 + 1;
+    }
+  }
+
+  return cost;
+}
+
+function matchPairGroupKey(sideA: [string, string], sideB: [string, string]): string {
+  return [partnershipKey(sideA), partnershipKey(sideB)].sort().join("|");
+}
+
+function courtGroupKey(sideA: [string, string], sideB: [string, string]): string {
+  return [...sideA, ...sideB].sort().join(":");
+}
+
+function partnershipKey(side: [string, string]): string {
+  return [...side].sort().join(":");
+}
+
+function playerPairKey(first: string, second: string): string {
+  return [first, second].sort().join(":");
 }
 
 function createMexicanoMatchesFromOrderedPlayers(

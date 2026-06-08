@@ -115,6 +115,22 @@ describe("scheduler", () => {
     assertNoRepeatedPlayerOpponents(seventhRound, eighthRound);
   });
 
+  it("balances Americano opponents before repeating the same players heavily", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: names(12),
+        courtCount: 3,
+        roundCount: 10,
+        scheduleSeed: "2026-05-31T17:03:18.685Z",
+      }),
+    );
+    const opponentCounts = collectOpponentCounts(state.rounds, state.players.map((player) => player.id));
+
+    assert.equal(opponentCounts.filter((count) => count === 0).length, 0);
+    assert.equal(Math.max(...opponentCounts), 3);
+  });
+
   it("uses the Americano schedule seed to vary matchups for the same player order", () => {
     const first = createInitialTournamentState(
       config({
@@ -372,6 +388,36 @@ function collectPartnerships(rounds: TournamentRound[]): Set<string> {
   return partnerships;
 }
 
+function collectOpponentCounts(rounds: TournamentRound[], playerIds: string[]): number[] {
+  const counts = new Map<string, number>();
+
+  for (const round of rounds) {
+    for (const match of round.matches) {
+      for (const playerId of match.sideA) {
+        for (const opponentId of match.sideB) {
+          const key = playerPairKey(playerId, opponentId);
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  const values: number[] = [];
+
+  for (let leftIndex = 0; leftIndex < playerIds.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < playerIds.length; rightIndex += 1) {
+      const left = playerIds[leftIndex];
+      const right = playerIds[rightIndex];
+
+      assert.ok(left);
+      assert.ok(right);
+      values.push(counts.get(playerPairKey(left, right)) ?? 0);
+    }
+  }
+
+  return values;
+}
+
 function assertNoRepeatedPartnerships(rounds: TournamentRound[]): void {
   const partnerships = new Set<string>();
 
@@ -440,6 +486,10 @@ function assertNoRepeatedPlayerOpponents(previousRound: TournamentRound, nextRou
 
 function partnershipKey(side: [string, string]): string {
   return [...side].sort().join(":");
+}
+
+function playerPairKey(first: string, second: string): string {
+  return [first, second].sort().join(":");
 }
 
 function courtGroupKey(match: TournamentRound["matches"][number]): string {
