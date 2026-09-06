@@ -28,6 +28,7 @@ import type {
   UpsertMatchResultRequest,
 } from "../types/tournament.js";
 import { badRequest } from "../domain/errors.js";
+import { parseTournamentTeams } from "../validation/tournaments.js";
 
 const ROOM_CODE_ATTEMPTS = 10;
 export const TOURNAMENT_REOPEN_WINDOW_MS = 5 * 60 * 1000;
@@ -54,11 +55,19 @@ export class TournamentService {
 
   async createTournament(request: CreateTournamentRequest): Promise<TournamentEntity> {
     const players = createPlayers(request.players);
+    const { format, teams } = parseTournamentTeams(request.format, request.teams, players.length);
     const createdAt = this.now();
     const config: TournamentConfig = {
       name: request.name,
       date: request.date,
       mode: request.mode,
+      format,
+      ...(teams ? {
+        teams: teams.map(([first, second], index) => ({
+          id: `team${index + 1}`,
+          playerIds: [players[first]!.id, players[second]!.id] as [string, string],
+        })),
+      } : {}),
       scheduleSeed: createdAt.toISOString(),
       targetScore: request.targetScore,
       courtCount: request.courtCount,
@@ -94,6 +103,7 @@ export class TournamentService {
             name: config.name,
             date: config.date,
             mode: config.mode,
+            format: config.format,
             playerCount: config.players.length,
             courtCount: config.courtCount,
             roundCount: config.roundCount,
@@ -298,6 +308,13 @@ export class TournamentService {
       name: sourceTournament.config.name,
       date: sourceTournament.config.date ?? localDateString(this.now()),
       mode: sourceTournament.config.mode,
+      format: sourceTournament.config.format ?? "rotating",
+      ...(sourceTournament.config.format === "fixed-pairs" ? {
+        teams: (sourceTournament.config.teams ?? []).map((team): [number, number] => [
+          sourceTournament.config.players.findIndex((player) => player.id === team.playerIds[0]),
+          sourceTournament.config.players.findIndex((player) => player.id === team.playerIds[1]),
+        ]),
+      } : {}),
       players: sourceTournament.config.players.map((player) => player.name),
       courtCount: sourceTournament.config.courtCount,
       roundCount: sourceTournament.config.roundCount,

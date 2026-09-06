@@ -1,4 +1,5 @@
 export type TournamentMode = "americano" | "mexicano";
+export type TournamentFormat = "rotating" | "fixed-pairs";
 
 export type TournamentStatus = "active" | "finished";
 
@@ -8,11 +9,13 @@ export type TournamentConfig = {
   name: string;
   date?: string;
   mode: TournamentMode;
+  format?: TournamentFormat;
   scheduleSeed?: string;
   targetScore: number;
   courtCount: number;
   roundCount: RoundCount;
   players: TournamentPlayer[];
+  teams?: TournamentTeam[];
 };
 
 export type Tournament = {
@@ -32,6 +35,7 @@ export type TournamentState = {
   targetScore: number;
   currentRoundIndex: number;
   players: TournamentPlayer[];
+  teams?: TournamentTeam[];
   rounds: TournamentRound[];
   leaderboard: LeaderboardEntry[];
 };
@@ -39,6 +43,11 @@ export type TournamentState = {
 export type TournamentPlayer = {
   id: string;
   name: string;
+};
+
+export type TournamentTeam = {
+  id: string;
+  playerIds: [string, string];
 };
 
 export type TournamentRoundStatus = "pending" | "active" | "complete";
@@ -69,7 +78,9 @@ export type MatchResult = {
 };
 
 export type LeaderboardEntry = {
+  // Identifies a player in rotating format, or a team in fixed-pairs format.
   playerId: string;
+  playerIds?: [string, string];
   played: number;
   wins: number;
   ties: number;
@@ -82,7 +93,9 @@ export type CreateTournamentRequest = {
   name: string;
   date: string;
   mode: TournamentMode;
+  format?: TournamentFormat;
   players: string[];
+  teams?: [number, number][];
   courtCount: number;
   roundCount: RoundCount;
   targetScore: number;
@@ -121,6 +134,7 @@ export type TournamentEvent = {
 };
 
 export type RecentRoom = {
+  format?: TournamentFormat;
   code: string;
   name: string;
   date?: string;

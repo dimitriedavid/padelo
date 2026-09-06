@@ -1,4 +1,4 @@
-import type { MatchResult, RoundCount, TournamentMode, TournamentRoundStatus } from "@/lib/types";
+import type { MatchResult, RoundCount, TournamentFormat, TournamentMode, TournamentRoundStatus } from "@/lib/types";
 
 export type ScoreboardPlayerId = string;
 
@@ -10,6 +10,7 @@ export type ScoreboardPlayer = {
 };
 
 export type ScoreboardStanding = ScoreboardPlayer & {
+  members?: ScoreboardPlayer[];
   played: number;
   points: number;
   wins: number;
@@ -29,6 +30,7 @@ export type ScoreboardMatch = {
 export type ScoreboardRound = {
   index: number;
   status: TournamentRoundStatus;
+  sittingOut?: string[];
   matches: ScoreboardMatch[];
 };
 
@@ -37,6 +39,7 @@ export type ScoreboardTournament = {
   name: string;
   date?: string | undefined;
   mode: TournamentMode;
+  format?: TournamentFormat;
   roundCount: RoundCount;
   targetScore: number;
   totalRounds: number;

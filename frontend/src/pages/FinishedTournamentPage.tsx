@@ -72,8 +72,10 @@ export function FinishedTournamentPage() {
   const tournamentMetadata = tournament
     ? [
         formatShortTournamentDate(tournament.config.date),
-        displayMode(tournament.config.mode),
-        `${tournament.state.players.length} players`,
+        displayMode(tournament.config.mode, tournament.config.format),
+        tournament.config.format === "fixed-pairs"
+          ? `${tournament.config.teams?.length ?? 0} pairs`
+          : `${tournament.state.players.length} players`,
         `${tournament.config.courtCount} courts`,
         `target ${tournament.config.targetScore}`,
         displayRoundCount(tournament),
@@ -113,6 +115,12 @@ export function FinishedTournamentPage() {
       state: {
         prefill: {
           mode: tournament.config.mode,
+          ...(tournament.config.format ? { format: tournament.config.format } : {}),
+          ...(tournament.config.teams ? {
+            teams: tournament.config.teams.map((team) => team.playerIds.map((id) =>
+              tournament.config.players.findIndex((player) => player.id === id),
+            )),
+          } : {}),
           players: tournament.config.players.map((player) => player.name),
           courtCount: tournament.config.courtCount,
           roundCount: tournament.config.roundCount,

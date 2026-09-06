@@ -48,6 +48,44 @@ The frontend calls the backend through same-origin `/api` routes. In development
 
 `mode` must be `americano` or `mexicano`.
 
+`format` is `rotating` (the default when omitted) or `fixed-pairs`. Fixed pairs
+require an even number of players and explicit `teams`, each containing two
+zero-based indices into `players`. Every player must appear exactly once:
+
+```json
+{
+  "name": "Friday Pairs",
+  "date": "2026-09-11",
+  "mode": "mexicano",
+  "format": "fixed-pairs",
+  "players": ["Alex", "Bea", "Chris", "Dana"],
+  "teams": [[0, 1], [2, 3]],
+  "courtCount": 1,
+  "roundCount": { "type": "infinite" },
+  "targetScore": 24
+}
+```
+
+Do not supply `teams` for rotating partners. Responses store teams in both
+`config.teams` and `state.teams` as `{ "id": "team1", "playerIds": ["p1", "p2"] }`.
+Fixed-pair leaderboard rows use the team ID in `playerId` and include the two
+members in `playerIds`. Points and match records are counted once per team, not
+summed across its members. Match sides and sitting-out lists still use player IDs.
+Existing tournaments without a format continue using rotating partners.
+
+### Fixed-Pair Scheduling
+
+- Americano schedules a round-robin between permanent teams. With limited courts,
+  each circle round is split into court-sized batches; a batch counts as one app
+  round. Every fixture in the cycle is played before rematches. Short batches may
+  leave courts unused. A finite schedule may finish before a complete cycle.
+- Mexicano starts with seeded shuffled teams. Subsequent rounds prioritize teams
+  with the fewest scheduled appearances, then leaderboard rank, and match adjacent
+  ranks among eligible teams. This balances participation without excluding
+  low-ranked teams indefinitely. Immediate rematches are possible.
+- An odd number of teams is supported; whole pairs sit out together.
+- Team membership is fixed after creation. Both Play again flows preserve pairs.
+
 `roundCount` can be open-ended:
 
 ```json

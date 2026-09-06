@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { PlayerAvatar } from "./PadeloBrand";
+import { AvatarStack, PlayerAvatar } from "./PadeloBrand";
 import type { ScoreboardPlayer } from "./scoreboard-types";
 
 export type LeaderboardPanelRow = {
   id: string;
   rank: number;
   player: ScoreboardPlayer;
+  members?: ScoreboardPlayer[];
   name: string;
   points: number;
   record: string;
@@ -16,16 +17,17 @@ type LeaderboardPanelProps = {
   rows: LeaderboardPanelRow[];
   showHeader?: boolean;
   title?: string;
+  participantLabel?: "players" | "pairs";
 };
 
-export function LeaderboardPanel({ rows, showHeader = true, title = "Leaderboard" }: LeaderboardPanelProps) {
+export function LeaderboardPanel({ rows, showHeader = true, title = "Leaderboard", participantLabel = "players" }: LeaderboardPanelProps) {
   return (
     <Card className="overflow-hidden">
       {showHeader ? (
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-3">
             <CardTitle>{title}</CardTitle>
-            <div className="text-sm font-medium text-muted-foreground">{rows.length} players</div>
+            <div className="text-sm font-medium text-muted-foreground">{rows.length} {participantLabel}</div>
           </div>
         </CardHeader>
       ) : null}
@@ -37,9 +39,11 @@ export function LeaderboardPanel({ rows, showHeader = true, title = "Leaderboard
               <div className="grid size-8 place-items-center rounded-md bg-secondary text-sm font-semibold text-primary">
                 {row.rank}
               </div>
-              <PlayerAvatar className="size-10 text-xs" player={row.player} />
+              {row.members ? <AvatarStack players={row.members} size="xs" /> : <PlayerAvatar className="size-10 text-xs" player={row.player} />}
               <div className="min-w-0">
-                <div className="truncate text-base font-semibold text-foreground">{row.name}</div>
+                <div className="break-words text-base font-semibold text-foreground">
+                  {row.members ? row.members.map((member) => <div key={member.id}>{member.name}</div>) : row.name}
+                </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{row.record}</div>
               </div>
               <div className="text-right">

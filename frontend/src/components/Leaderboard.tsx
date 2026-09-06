@@ -13,20 +13,22 @@ export function Leaderboard({ tournament }: LeaderboardProps) {
   const avatarPlayers = assignPlayerAvatarColors(tournament.state.players.map(toAvatarPlayer));
   const playersById = new Map(avatarPlayers.map((player) => [player.id, player]));
   const rows: LeaderboardPanelRow[] = entries.map((entry, index) => {
-    const player = playersById.get(entry.playerId) ?? fallbackAvatarPlayer(tournament, entry.playerId);
+    const members = entry.playerIds?.map((id) => playersById.get(id) ?? fallbackAvatarPlayer(tournament, id));
+    const player = members?.[0] ?? playersById.get(entry.playerId) ?? fallbackAvatarPlayer(tournament, entry.playerId);
     const losses = Math.max(0, entry.played - entry.wins - (entry.ties ?? 0));
 
     return {
       id: entry.playerId,
-      name: playerName(tournament, entry.playerId),
+      name: members ? members.map((member) => member.name).join(" + ") : player.name,
       player,
+      ...(members ? { members } : {}),
       points: entry.pointsFor,
       rank: index + 1,
       record: `${entry.wins}W ${(entry.ties ?? 0)}T ${losses}L`,
     };
   });
 
-  return <LeaderboardPanel rows={rows} />;
+  return <LeaderboardPanel rows={rows} participantLabel={tournament.config.format === "fixed-pairs" ? "pairs" : "players"} />;
 }
 
 function toAvatarPlayer(player: { id: string; name: string }): ScoreboardPlayer {

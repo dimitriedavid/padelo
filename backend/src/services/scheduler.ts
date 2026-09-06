@@ -10,6 +10,24 @@ import type {
 
 export function createInitialTournamentState(config: TournamentConfig): TournamentState {
   const roundLimit = resolveRoundLimit(config.roundCount);
+  if (config.format === "fixed-pairs") {
+    if (!config.teams || config.teams.length < 2) {
+      throw new Error("Fixed-pair scheduling requires at least two teams.");
+    }
+    const state: TournamentState = {
+      targetScore: config.targetScore,
+      currentRoundIndex: 0,
+      players: config.players,
+      teams: config.teams,
+      rounds: [],
+      leaderboard: [],
+    };
+    const count = config.mode === "americano" ? roundLimit ?? 1 : 1;
+    for (let index = 0; index < count; index += 1) {
+      state.rounds.push(generateFixedPairsRound(config, state, index));
+    }
+    return normalizeTournamentState(state);
+  }
   const rounds =
     config.mode === "americano" && roundLimit !== null
       ? generateAmericanoRounds(config.players, config.courtCount, roundLimit, config.scheduleSeed)
@@ -43,15 +61,17 @@ export function maybeAppendNextRound(
 
   const nextRoundIndex = normalizedState.rounds.length;
   const nextRound =
-    config.mode === "mexicano"
-      ? generateMexicanoRound(config, normalizedState, nextRoundIndex)
-      : generateAmericanoRound(
-          config.players,
-          config.courtCount,
-          nextRoundIndex,
-          config.scheduleSeed,
-          normalizedState.rounds,
-        );
+    config.format === "fixed-pairs"
+      ? generateFixedPairsRound(config, normalizedState, nextRoundIndex)
+      : config.mode === "mexicano"
+        ? generateMexicanoRound(config, normalizedState, nextRoundIndex)
+        : generateAmericanoRound(
+            config.players,
+            config.courtCount,
+            nextRoundIndex,
+            config.scheduleSeed,
+            normalizedState.rounds,
+          );
 
   return normalizeTournamentState({
     ...normalizedState,
@@ -79,7 +99,16 @@ export function normalizeTournamentState(state: TournamentState): TournamentStat
     ...state,
     currentRoundIndex,
     rounds,
-    leaderboard: calculateLeaderboard(state.players, rounds),
+    // A representative gets exactly one side's stats, not the sum of both members.
+    leaderboard: state.teams
+      ? calculateLeaderboard(
+          state.teams.map((team) => ({ id: team.playerIds[0], name: team.id })),
+          rounds,
+        ).map((entry) => {
+          const team = state.teams!.find((candidate) => candidate.playerIds[0] === entry.playerId)!;
+          return { ...entry, playerId: team.id, playerIds: team.playerIds };
+        })
+      : calculateLeaderboard(state.players, rounds),
   };
 }
 
@@ -101,6 +130,81 @@ function orderAmericanoPlayerIds(playerIds: string[], scheduleSeed: string | und
   }
 
   return shuffleItems(playerIds, `${scheduleSeed}:${playerIds.join("|")}`);
+}
+
+function generateFixedPairsRound(
+  config: TournamentConfig,
+  state: TournamentState,
+  roundIndex: number,
+): TournamentRound {
+  const teams = config.teams;
+  if (!teams || teams.length < 2) {
+    throw new Error("Fixed-pair scheduling requires at least two teams.");
+  }
+  const orderedIds = orderAmericanoPlayerIds(teams.map((team) => team.id), config.scheduleSeed);
+  const byId = new Map(teams.map((team) => [team.id, team]));
+  const byPlayer = new Map(teams.flatMap((team) => team.playerIds.map((id) => [id, team.id] as const)));
+  const appearances = new Map(teams.map((team) => [team.id, 0]));
+  const lastPlayed = new Map(teams.map((team) => [team.id, -1]));
+  for (const round of state.rounds) {
+    for (const match of round.matches) {
+      for (const side of [match.sideA, match.sideB]) {
+        const id = byPlayer.get(side[0])!;
+        appearances.set(id, appearances.get(id)! + 1);
+        lastPlayed.set(id, round.index);
+      }
+    }
+  }
+
+  let fixtures: [string, string][];
+  if (config.mode === "americano") {
+    const batchesPerRound = Math.ceil(Math.floor(teams.length / 2) / config.courtCount);
+    const fixtureRound = Math.floor(roundIndex / batchesPerRound);
+    const batchIndex = roundIndex % batchesPerRound;
+    const alreadyPlayed = new Set(
+      state.rounds.slice(roundIndex - batchIndex).flatMap((round) =>
+        round.matches.flatMap((match) => [byPlayer.get(match.sideA[0]), byPlayer.get(match.sideB[0])]),
+      ),
+    );
+    // Finish every fixture in this circle round before advancing, including the short batch.
+    fixtures = generateAmericanoPairs(orderedIds, fixtureRound)
+      .filter(([first, second]) => !alreadyPlayed.has(first) && !alreadyPlayed.has(second))
+      .sort((a, b) =>
+        (appearances.get(a[0])! + appearances.get(a[1])!) -
+          (appearances.get(b[0])! + appearances.get(b[1])!) ||
+        (lastPlayed.get(a[0])! + lastPlayed.get(a[1])!) -
+          (lastPlayed.get(b[0])! + lastPlayed.get(b[1])!),
+      )
+      .slice(0, config.courtCount);
+  } else {
+    // Appearances prevent starvation; rank breaks ties without locking in rest groups.
+    const rank = new Map(state.leaderboard.map((entry, index) => [entry.playerId, index]));
+    const eligible = [...orderedIds].sort((a, b) =>
+      appearances.get(a)! - appearances.get(b)! || (rank.get(a) ?? 0) - (rank.get(b) ?? 0),
+    ).slice(0, Math.min(config.courtCount, Math.floor(teams.length / 2)) * 2);
+    if (roundIndex > 0) {
+      eligible.sort((a, b) => rank.get(a)! - rank.get(b)!);
+    }
+    fixtures = [];
+    for (let index = 0; index < eligible.length; index += 2) {
+      fixtures.push([eligible[index]!, eligible[index + 1]!]);
+    }
+  }
+
+  const matches: TournamentMatch[] = fixtures.map(([first, second], index) => ({
+    id: `r${roundIndex + 1}m${index + 1}`,
+    courtNumber: index + 1,
+    sideA: [...byId.get(first)!.playerIds],
+    sideB: [...byId.get(second)!.playerIds],
+    result: null,
+  }));
+  const playing = new Set(matches.flatMap((match) => [...match.sideA, ...match.sideB]));
+  return {
+    index: roundIndex,
+    status: roundIndex === 0 ? "active" : "pending",
+    sittingOut: config.players.map((player) => player.id).filter((id) => !playing.has(id)),
+    matches,
+  };
 }
 
 function generateAmericanoRound(
@@ -250,14 +354,23 @@ function createBalancedMatchPairGroups(
   }
 
   const opponentCounts = collectOpponentCounts(previousRounds);
+  const opponentStreaks = collectOpponentStreaks(previousRounds);
   const previousCourtGroups = collectCourtGroups(previousRounds);
   const preferredGroups = rotateItems(createRoundRobinMatchPairGroups(roundPairs, matchingIndex), roundIndex + matchingIndex);
   const preferredOrder = new Map(
     preferredGroups.map(([sideA, sideB], index) => [matchPairGroupKey(sideA, sideB), index]),
   );
-  const candidates = createMatchPairGroupCandidates(roundPairs, opponentCounts, previousCourtGroups, preferredOrder);
+  const candidates = createMatchPairGroupCandidates(
+    roundPairs,
+    opponentCounts,
+    opponentStreaks,
+    previousCourtGroups,
+    preferredOrder,
+  );
   const beamWidth = 128;
-  let states: MatchPairGroupSearchState[] = [{ groups: [], usedPairIndexes: new Set(), score: 0, orderKey: "" }];
+  let states: MatchPairGroupSearchState[] = [
+    { groups: [], usedPairIndexes: new Set(), score: 0, streakScore: 0, orderKey: "" },
+  ];
 
   for (let index = 0; index < groupCount; index += 1) {
     const nextStates: MatchPairGroupSearchState[] = [];
@@ -278,6 +391,7 @@ function createBalancedMatchPairGroups(
           groups: [...state.groups, [candidate.sideA, candidate.sideB]],
           usedPairIndexes,
           score: state.score + candidate.score,
+          streakScore: state.streakScore + candidate.streakScore,
           orderKey: `${state.orderKey}:${candidate.order}`,
         });
       }
@@ -342,6 +456,7 @@ type MatchPairGroupCandidate = {
   sideA: [string, string];
   sideB: [string, string];
   score: number;
+  streakScore: number;
   order: number;
 };
 
@@ -349,12 +464,14 @@ type MatchPairGroupSearchState = {
   groups: Array<[[string, string], [string, string]]>;
   usedPairIndexes: Set<number>;
   score: number;
+  streakScore: number;
   orderKey: string;
 };
 
 function createMatchPairGroupCandidates(
   roundPairs: [string, string][],
   opponentCounts: Map<string, number>,
+  opponentStreaks: Map<string, number>,
   previousCourtGroups: Set<string>,
   preferredOrder: Map<string, number>,
 ): MatchPairGroupCandidate[] {
@@ -378,6 +495,7 @@ function createMatchPairGroupCandidates(
         sideA,
         sideB,
         score: opponentRepeatCost(sideA, sideB, opponentCounts) + repeatedCourtGroupPenalty,
+        streakScore: opponentStreakCost(sideA, sideB, opponentStreaks),
         order: preferredOrder.get(key) ?? roundPairs.length * roundPairs.length + candidates.length,
       });
     }
@@ -400,6 +518,10 @@ function compareMatchPairGroupSearchStates(
     return first.score - second.score;
   }
 
+  if (first.streakScore !== second.streakScore) {
+    return first.streakScore - second.streakScore;
+  }
+
   return first.orderKey.localeCompare(second.orderKey);
 }
 
@@ -418,6 +540,59 @@ function collectOpponentCounts(rounds: TournamentRound[]): Map<string, number> {
   }
 
   return counts;
+}
+
+function collectOpponentStreaks(rounds: TournamentRound[]): Map<string, number> {
+  const streaks = new Map<string, number>();
+  let activeStreakPairs: Set<string> | null = null;
+
+  for (let roundIndex = rounds.length - 1; roundIndex >= 0; roundIndex -= 1) {
+    const round = rounds[roundIndex];
+
+    if (!round) {
+      continue;
+    }
+
+    const roundOpponentPairs = collectRoundOpponentPairs(round);
+
+    if (activeStreakPairs === null) {
+      activeStreakPairs = roundOpponentPairs;
+
+      for (const pairKey of activeStreakPairs) {
+        streaks.set(pairKey, 1);
+      }
+
+      continue;
+    }
+
+    activeStreakPairs = new Set(
+      [...activeStreakPairs].filter((pairKey: string) => roundOpponentPairs.has(pairKey)),
+    );
+
+    if (activeStreakPairs.size === 0) {
+      break;
+    }
+
+    for (const pairKey of activeStreakPairs) {
+      streaks.set(pairKey, (streaks.get(pairKey) ?? 0) + 1);
+    }
+  }
+
+  return streaks;
+}
+
+function collectRoundOpponentPairs(round: TournamentRound): Set<string> {
+  const pairs = new Set<string>();
+
+  for (const match of round.matches) {
+    for (const playerId of match.sideA) {
+      for (const opponentId of match.sideB) {
+        pairs.add(playerPairKey(playerId, opponentId));
+      }
+    }
+  }
+
+  return pairs;
 }
 
 function collectCourtGroups(rounds: TournamentRound[]): Set<string> {
@@ -441,8 +616,26 @@ function opponentRepeatCost(
 
   for (const playerId of sideA) {
     for (const opponentId of sideB) {
-      const previousCount = opponentCounts.get(playerPairKey(playerId, opponentId)) ?? 0;
+      const opponentPairKey = playerPairKey(playerId, opponentId);
+      const previousCount = opponentCounts.get(opponentPairKey) ?? 0;
       cost += previousCount * 2 + 1;
+    }
+  }
+
+  return cost;
+}
+
+function opponentStreakCost(
+  sideA: [string, string],
+  sideB: [string, string],
+  opponentStreaks: Map<string, number>,
+): number {
+  let cost = 0;
+
+  for (const playerId of sideA) {
+    for (const opponentId of sideB) {
+      const opponentStreak = opponentStreaks.get(playerPairKey(playerId, opponentId)) ?? 0;
+      cost += opponentStreak * opponentStreak;
     }
   }
 

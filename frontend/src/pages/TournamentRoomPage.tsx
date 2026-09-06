@@ -369,6 +369,10 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
   const rounds = tournament.state.rounds.map((round) => ({
     index: round.index,
     status: round.status,
+    sittingOut: tournament.config.teams
+      ? tournament.config.teams.filter((team) => round.sittingOut.includes(team.playerIds[0]))
+        .map((team) => team.playerIds.map((id) => getPlayer(id).name).join(" + "))
+      : round.sittingOut.map((id) => getPlayer(id).name),
     matches: round.matches.map((match) => ({
       id: match.id,
       courtNumber: match.courtNumber,
@@ -383,6 +387,7 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
     name: tournament.name,
     date: tournament.config.date,
     mode: tournament.config.mode,
+    ...(tournament.config.format ? { format: tournament.config.format } : {}),
     roundCount: tournament.config.roundCount,
     targetScore: tournament.state.targetScore,
     totalRounds: rounds.length,
@@ -392,10 +397,14 @@ function toScoreboardTournament(tournament: Tournament, currentRoundIndex: numbe
     players,
     rounds,
     standings: tournament.state.leaderboard.map((entry) => {
-      const player = getPlayer(entry.playerId);
+      const members = entry.playerIds?.map(getPlayer);
+      const player = members
+        ? { id: entry.playerId, name: members.map((member) => member.name).join(" + "), initials: "" }
+        : getPlayer(entry.playerId);
 
       return {
         ...player,
+        ...(members ? { members } : {}),
         played: entry.played,
         points: entry.pointsFor,
         wins: entry.wins,

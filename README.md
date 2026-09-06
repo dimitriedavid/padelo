@@ -7,6 +7,7 @@ Production site: [padelo.fun](https://padelo.fun)
 ## Features
 
 - Americano and Mexicano tournament setup.
+- Rotating partners or fixed pairs, with explicit pair setup and team standings.
 - Fixed-round or open-ended sessions.
 - Room codes, shared URLs, and QR-friendly tournament rooms.
 - Live score updates with server-sent events.

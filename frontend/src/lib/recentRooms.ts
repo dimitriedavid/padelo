@@ -30,6 +30,7 @@ export function saveRecentTournament(tournament: Tournament): RecentRoom[] {
     ...(tournament.config.date ? { date: tournament.config.date } : {}),
     lastOpenedAt: new Date().toISOString(),
     mode: tournament.config.mode,
+    ...(tournament.config.format ? { format: tournament.config.format } : {}),
     playerCount: tournament.config.players.length,
     status: tournament.status,
   };
@@ -60,6 +61,7 @@ function isRecentRoom(value: unknown): value is RecentRoom {
     (candidate.date === undefined || typeof candidate.date === "string") &&
     typeof candidate.lastOpenedAt === "string" &&
     (candidate.mode === undefined || candidate.mode === "americano" || candidate.mode === "mexicano") &&
+    (candidate.format === undefined || candidate.format === "rotating" || candidate.format === "fixed-pairs") &&
     (candidate.playerCount === undefined ||
       (typeof candidate.playerCount === "number" &&
         Number.isInteger(candidate.playerCount) &&

@@ -1,5 +1,12 @@
 export type TournamentMode = "americano" | "mexicano";
 
+export type TournamentFormat = "rotating" | "fixed-pairs";
+
+export type TournamentTeam = {
+  id: string;
+  playerIds: [string, string];
+};
+
 export type TournamentStatus = "active" | "finished";
 
 export type RoundCount =
@@ -10,6 +17,8 @@ export type TournamentConfig = {
   name: string;
   date?: string;
   mode: TournamentMode;
+  format?: TournamentFormat;
+  teams?: TournamentTeam[];
   scheduleSeed?: string;
   targetScore: number;
   courtCount: number;
@@ -18,6 +27,7 @@ export type TournamentConfig = {
 };
 
 export type TournamentState = {
+  teams?: TournamentTeam[];
   targetScore: number;
   currentRoundIndex: number;
   players: TournamentPlayer[];
@@ -58,7 +68,9 @@ export type MatchResult = {
 };
 
 export type LeaderboardEntry = {
+  // Entity key: a player ID for rotating, a team ID for fixed-pairs.
   playerId: string;
+  playerIds?: [string, string];
   played: number;
   wins: number;
   ties: number;
@@ -71,6 +83,9 @@ export type CreateTournamentRequest = {
   name: string;
   date: string;
   mode: TournamentMode;
+  format?: TournamentFormat;
+  // Zero-based indices into the flat players array; required for fixed-pairs.
+  teams?: [number, number][];
   players: string[];
   courtCount: number;
   roundCount: RoundCount;

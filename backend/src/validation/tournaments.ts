@@ -6,6 +6,7 @@ import type {
   ReopenTournamentRequest,
   RoundCount,
   TournamentMode,
+  TournamentFormat,
   UpsertMatchResultRequest,
 } from "../types/tournament.js";
 
@@ -21,6 +22,7 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
   const date = parseTournamentDate(value.date);
   const mode = parseMode(value.mode);
   const players = parsePlayers(value.players);
+  const { format, teams } = parseTournamentTeams(value.format, value.teams, players.length);
   const courtCount = requireInteger(value.courtCount, "courtCount", 1, MAX_COURTS);
   const roundCount = parseRoundCount(value.roundCount);
   const targetScore = requireInteger(value.targetScore, "targetScore", 1, MAX_TARGET_SCORE);
@@ -52,11 +54,63 @@ export function parseCreateTournamentRequest(input: unknown): CreateTournamentRe
     name,
     date,
     mode,
+    format,
+    ...(teams ? { teams } : {}),
     players,
     courtCount,
     roundCount,
     targetScore,
   };
+}
+
+export function parseTournamentTeams(
+  inputFormat: unknown,
+  inputTeams: unknown,
+  playerCount: number,
+): { format: TournamentFormat; teams?: [number, number][] } {
+  const format = inputFormat === undefined ? "rotating" : inputFormat;
+
+  if (format !== "rotating" && format !== "fixed-pairs") {
+    throw badRequest("validation_error", "Format must be rotating or fixed-pairs.", { field: "format" });
+  }
+
+  if (format === "rotating") {
+    if (inputTeams !== undefined) {
+      throw badRequest("validation_error", "Teams are only allowed for fixed-pairs.", { field: "teams" });
+    }
+    return { format };
+  }
+
+  if (playerCount < 4 || playerCount % 2 !== 0) {
+    throw badRequest("validation_error", "Fixed pairs require an even number of at least 4 players.", {
+      field: "players",
+    });
+  }
+  if (!Array.isArray(inputTeams) || inputTeams.length !== playerCount / 2) {
+    throw badRequest("validation_error", "Provide teams covering every player exactly once.", { field: "teams" });
+  }
+
+  const seen = new Set<number>();
+  const teams = inputTeams.map((team, index): [number, number] => {
+    const field = `teams.${index}`;
+    if (!Array.isArray(team) || team.length !== 2) {
+      throw badRequest("validation_error", "Each team must contain two player indices.", { field });
+    }
+    const first = requireInteger(team[0], field, 0, playerCount - 1);
+    const second = requireInteger(team[1], field, 0, playerCount - 1);
+    if (first === second || seen.has(first) || seen.has(second)) {
+      throw badRequest("validation_error", "Each player must belong to exactly one team.", { field });
+    }
+    seen.add(first);
+    seen.add(second);
+    return [first, second];
+  });
+
+  if (seen.size !== playerCount) {
+    throw badRequest("validation_error", "Provide teams covering every player exactly once.", { field: "teams" });
+  }
+
+  return { format, teams };
 }
 
 function parseTournamentDate(input: unknown): string {

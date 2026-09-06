@@ -364,8 +364,8 @@ export function Scoreboard({
   const activeRound = tournament.rounds[tournament.activeRoundIndex];
   const tournamentMetadata = [
     formatShortTournamentDate(tournament.date),
-    displayMode(tournament.mode),
-    `${tournament.players.length} players`,
+    displayMode(tournament.mode, tournament.format),
+    tournament.format === "fixed-pairs" ? `${tournament.standings.length} pairs` : `${tournament.players.length} players`,
     `${tournament.courts} courts`,
     `target ${tournament.targetScore}`,
     roundCountLabel(tournament),
@@ -396,6 +396,7 @@ export function Scoreboard({
         id: player.id,
         name: player.name,
         player,
+        ...(player.members ? { members: player.members } : {}),
         points: player.points,
         rank: index + 1,
         record: `${player.wins}W ${player.ties}T ${player.losses}L`,
@@ -505,6 +506,12 @@ export function Scoreboard({
                     targetScore={tournament.targetScore}
                   />
                 ))}
+                {round.sittingOut && round.sittingOut.length > 0 ? (
+                  <div className="space-y-1 px-1 py-2 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">Sitting out this round</p>
+                    {round.sittingOut.map((name) => <p className="break-words" key={name}>{name}</p>)}
+                  </div>
+                ) : null}
               </>
             ) : (
               <Alert>

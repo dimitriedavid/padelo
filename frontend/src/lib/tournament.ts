@@ -12,8 +12,9 @@ export function sortLeaderboard(tournament: Tournament): LeaderboardEntry[] {
   return [...tournament.state.leaderboard];
 }
 
-export function displayMode(mode: string): string {
-  return mode === "mexicano" ? "Mexicano" : "Americano";
+export function displayMode(mode: string, format?: string): string {
+  const name = mode === "mexicano" ? "Mexicano" : "Americano";
+  return format === "fixed-pairs" ? `${name} (fixed pairs)` : name;
 }
 
 export function displayRoundCount(tournament: Tournament): string {

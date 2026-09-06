@@ -131,6 +131,29 @@ describe("scheduler", () => {
     assert.equal(Math.max(...opponentCounts), 3);
   });
 
+  it("avoids long Americano opponent streaks when alternatives are available", () => {
+    const state = createInitialTournamentState(
+      config({
+        mode: "americano",
+        players: [
+          "Victor",
+          "Dimi",
+          "Anton",
+          "Cosmin S",
+          "Radu",
+          "Matei",
+          "Cosmin G",
+          "Traian",
+        ],
+        courtCount: 2,
+        roundCount: 10,
+        scheduleSeed: "2026-07-08T18:05:18.999Z",
+      }),
+    );
+
+    assertMaxConsecutiveOpponentStreak(state.rounds, 2);
+  });
+
   it("uses the Americano schedule seed to vary matchups for the same player order", () => {
     const first = createInitialTournamentState(
       config({
@@ -482,6 +505,44 @@ function assertNoRepeatedPlayerOpponents(previousRound: TournamentRound, nextRou
       `Player ${playerId} repeated opponents ${context.opponents.join(":")}`,
     );
   }
+}
+
+function assertMaxConsecutiveOpponentStreak(rounds: TournamentRound[], maxStreak: number): void {
+  const activeStreaks = new Map<string, number>();
+
+  for (const round of rounds) {
+    const roundOpponentPairs = collectRoundOpponentPairKeys(round);
+
+    for (const pairKey of [...activeStreaks.keys()]) {
+      if (!roundOpponentPairs.has(pairKey)) {
+        activeStreaks.delete(pairKey);
+      }
+    }
+
+    for (const pairKey of roundOpponentPairs) {
+      const streak = (activeStreaks.get(pairKey) ?? 0) + 1;
+      activeStreaks.set(pairKey, streak);
+
+      assert.ok(
+        streak <= maxStreak,
+        `Opponent pair ${pairKey} repeated for ${streak} consecutive rounds`,
+      );
+    }
+  }
+}
+
+function collectRoundOpponentPairKeys(round: TournamentRound): Set<string> {
+  const pairs = new Set<string>();
+
+  for (const match of round.matches) {
+    for (const playerId of match.sideA) {
+      for (const opponentId of match.sideB) {
+        pairs.add(playerPairKey(playerId, opponentId));
+      }
+    }
+  }
+
+  return pairs;
 }
 
 function partnershipKey(side: [string, string]): string {

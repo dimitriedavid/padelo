@@ -18,7 +18,7 @@ import { createTournament } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { saveRecentTournament } from "../lib/recentRooms";
 import { localDateString } from "../lib/tournament";
-import type { CreateTournamentRequest, RoundCount, TournamentMode } from "../lib/types";
+import type { CreateTournamentRequest, RoundCount, TournamentFormat, TournamentMode } from "../lib/types";
 
 type RoundMode = "fixed" | "infinite";
 type TournamentPrefill = Omit<CreateTournamentRequest, "date" | "name"> & { name?: string };
@@ -46,11 +46,15 @@ export function NewTournamentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const prefill = prefillFromLocationState(location.state);
-  const initialPlayerValues = initialPlayers(prefill?.players);
+  const initialPlayerValues = initialPlayers(prefill?.format === "fixed-pairs"
+    ? prefill.teams?.flatMap((team) => team.map((index) => prefill.players[index] ?? ""))
+    : prefill?.players);
   const initialPlayerCount = playerNamesFromPlayers(initialPlayerValues).length;
   const initialCourtCount = initialCourtCountForPlayerCount(prefill?.courtCount, initialPlayerCount);
   const [name, setName] = useState(() => prefill?.name ?? defaultTournamentName());
   const [mode, setMode] = useState<TournamentMode>(prefill?.mode ?? "americano");
+  const [format, setFormat] = useState<TournamentFormat>(prefill?.format ?? "rotating");
+  const isFixedPairs = format === "fixed-pairs";
   const [players, setPlayers] = useState(() => initialPlayerValues);
   const [courtCountInput, setCourtCountInput] = useState(() => String(initialCourtCount));
   const [hasEditedCourtCount, setHasEditedCourtCount] = useState(Boolean(prefill?.courtCount));
@@ -83,7 +87,8 @@ export function NewTournamentPage() {
     playerNames.length >= 4 ? roundsForCompleteAmericanoRotation(playerNames.length) : null;
   const hasValidNumbers =
     courtCount !== null && targetScore !== null && (roundMode === "infinite" || roundValue !== null);
-  const isFormValid = name.trim().length > 0 && playerNames.length >= 4 && hasValidNumbers;
+  const hasCompletePairs = players.length >= 4 && players.length % 2 === 0 && players.every((player) => player.trim().length > 0);
+  const isFormValid = name.trim().length > 0 && playerNames.length >= 4 && hasValidNumbers && (!isFixedPairs || hasCompletePairs);
   const canSubmit = isFormValid && !isSubmitting;
 
   const showValidationError = (message: string) => {
@@ -108,6 +113,11 @@ export function NewTournamentPage() {
 
     if (name.trim().length === 0) {
       showValidationError("Enter a tournament name.");
+      return;
+    }
+
+    if (isFixedPairs && !hasCompletePairs) {
+      showValidationError("Add at least 2 complete pairs. Enter both player names in every pair or remove the incomplete pair.");
       return;
     }
 
@@ -146,6 +156,10 @@ export function NewTournamentPage() {
         name: name.trim(),
         date: localDateString(),
         mode,
+        format,
+        ...(isFixedPairs ? {
+          teams: Array.from({ length: players.length / 2 }, (_, index): [number, number] => [index * 2, index * 2 + 1]),
+        } : {}),
         players: playerNames,
         courtCount,
         roundCount,
@@ -167,7 +181,7 @@ export function NewTournamentPage() {
   const addPlayer = () => {
     setPlayers((current) => {
       pendingPlayerFocusIndex.current = current.length;
-      return [...current, ""];
+      return [...current, ...Array.from({ length: isFixedPairs ? 2 : 1 }, () => "")];
     });
   };
 
@@ -314,6 +328,7 @@ export function NewTournamentPage() {
             <div className="space-y-2">
               <Label>Mode</Label>
               <RadioGroup
+                aria-label="Mode"
                 className="grid gap-2 sm:grid-cols-2"
                 onValueChange={(value) => setMode(value as TournamentMode)}
                 value={mode}
@@ -337,7 +352,7 @@ export function NewTournamentPage() {
                           <span className="font-display text-base font-semibold leading-none">
                             {option.title}
                           </span>
-                          <span className="text-sm text-muted-foreground">{option.description}</span>
+                          <span className="text-sm text-muted-foreground">{isFixedPairs && option.id === "americano" ? "Rotating opponents" : option.description}</span>
                         </span>
                       </Label>
                       <Button
@@ -358,13 +373,42 @@ export function NewTournamentPage() {
                 })}
               </RadioGroup>
             </div>
+            <div className="space-y-2">
+              <Label>Format</Label>
+              <RadioGroup
+                aria-label="Format"
+                className="grid gap-2 sm:grid-cols-2"
+                onValueChange={(value) => {
+                  setFormat(value as TournamentFormat);
+                  setError(null);
+                  if (value === "fixed-pairs") {
+                    setPlayers((current) => current.length % 2 === 0 ? current : [...current, ""]);
+                  }
+                }}
+                value={format}
+              >
+                {(["rotating", "fixed-pairs"] as const).map((value) => (
+                  <Label
+                    className={cn(
+                      "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border bg-card px-3 py-3 transition-colors hover:bg-secondary/50 focus-within:ring-3 focus-within:ring-ring/50",
+                      format === value && "border-primary bg-accent text-accent-foreground",
+                    )}
+                    htmlFor={`format-${value}`}
+                    key={value}
+                  >
+                    <RadioGroupItem id={`format-${value}`} value={value} />
+                    {value === "rotating" ? "Rotating partners" : "Fixed pairs"}
+                  </Label>
+                ))}
+              </RadioGroup>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-foreground">Players</h2>
+              <h2 className="text-base font-semibold text-foreground">{isFixedPairs ? "Pairs" : "Players"}</h2>
               <Button
                 onClick={addPlayer}
                 size="sm"
@@ -372,11 +416,56 @@ export function NewTournamentPage() {
                 variant="secondary"
               >
                 <Plus size={16} />
-                Add
+                {isFixedPairs ? "Add pair" : "Add"}
               </Button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            {isFixedPairs ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Add at least 2 pairs. Partners stay together and score as a team.</p>
+                {Array.from({ length: players.length / 2 }, (_, pairIndex) => (
+                  <fieldset className="min-w-0 space-y-2" key={pairIndex}>
+                    <legend className="text-sm font-medium">Pair {pairIndex + 1}</legend>
+                    <div className="flex justify-end">
+                      <Button
+                        aria-label={`Remove pair ${pairIndex + 1}`}
+                        disabled={players.length <= 4}
+                        onClick={() => {
+                          pendingPlayerFocusIndex.current = Math.min(pairIndex * 2, players.length - 4);
+                          setPlayers((current) => current.filter((_, index) => Math.floor(index / 2) !== pairIndex));
+                        }}
+                        size="icon-lg"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {[0, 1].map((slot) => {
+                        const index = pairIndex * 2 + slot;
+                        return (
+                          <Input
+                            aria-label={`Pair ${pairIndex + 1}, player ${slot + 1}`}
+                            autoCapitalize="words"
+                            className="h-11"
+                            enterKeyHint="next"
+                            key={slot}
+                            maxLength={60}
+                            onChange={(event) => updatePlayer(index, event.target.value)}
+                            onKeyDown={(event) => onPlayerKeyDown(event, index)}
+                            onKeyUp={onPlayerKeyUp}
+                            placeholder={`Player ${slot + 1}`}
+                            ref={(element) => { playerInputRefs.current[index] = element; }}
+                            value={players[index]}
+                          />
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ))}
+              </div>
+            ) : <div className="grid gap-2 sm:grid-cols-2">
               {players.map((player, index) => (
                 <div className="flex gap-2" key={index}>
                   <Input
@@ -405,7 +494,7 @@ export function NewTournamentPage() {
                   </Button>
                 </div>
               ))}
-            </div>
+            </div>}
           </CardContent>
         </Card>
 
@@ -480,6 +569,10 @@ export function NewTournamentPage() {
                 <p className="text-sm text-muted-foreground">
                   You can finish the tournament after any number of rounds.
                 </p>
+              ) : isFixedPairs ? (
+                <p className="text-sm text-muted-foreground">
+                  {mode === "americano" ? "Pairs face different opponents across rounds. With limited courts, some pairs sit out." : "Pairs face opponents based on the current team standings."}
+                </p>
               ) : mode === "americano" && americanoCompleteRotationRounds !== null ? (
                 <p className="text-sm text-muted-foreground">
                   Minimum {americanoCompleteRotationRounds} rounds needed for everyone to play with everyone.
@@ -507,12 +600,12 @@ export function NewTournamentPage() {
             <DialogHeader>
               <DialogTitle>{modeInfo === "americano" ? "Americano rules" : "Mexicano rules"}</DialogTitle>
               <DialogDescription>
-                {modeInfo === "americano"
+                {isFixedPairs ? "Partners stay together throughout the tournament." : modeInfo === "americano"
                   ? "Balanced rounds with rotating partners."
                   : "Performance-based rounds that regroup players as scores come in."}
               </DialogDescription>
             </DialogHeader>
-            <ModeRules mode={modeInfo} />
+            <ModeRules format={format} mode={modeInfo} />
           </DialogContent>
         ) : null}
       </Dialog>
@@ -520,7 +613,20 @@ export function NewTournamentPage() {
   );
 }
 
-function ModeRules({ mode }: { mode: TournamentMode }) {
+function ModeRules({ mode, format }: { mode: TournamentMode; format: TournamentFormat }) {
+  if (format === "fixed-pairs") {
+    return (
+      <div className="space-y-3 text-sm leading-6 text-foreground">
+        <p>{mode === "americano" ? "Americano creates a schedule with rotating opponents for your fixed pairs." : "Mexicano creates each next round from the current team standings."}</p>
+        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+          <li>Partners stay together and collect points as a team.</li>
+          <li>{mode === "americano" ? "Rounds are generated up front from the pair list." : "Teams are matched by performance after the current round has scores."}</li>
+          <li>Pairs sit out together when there are not enough courts.</li>
+          <li>The standings rank teams by total points first, then wins, ties, and point difference.</li>
+        </ul>
+      </div>
+    );
+  }
   if (mode === "americano") {
     return (
       <div className="space-y-3 text-sm leading-6 text-foreground">
@@ -643,8 +749,16 @@ function isTournamentPrefill(value: unknown): value is TournamentPrefill {
   return (
     (candidate.name === undefined || typeof candidate.name === "string") &&
     (candidate.mode === "americano" || candidate.mode === "mexicano") &&
+    (candidate.format === undefined || candidate.format === "rotating" || candidate.format === "fixed-pairs") &&
     Array.isArray(candidate.players) &&
     candidate.players.every((player) => typeof player === "string") &&
+    (candidate.format !== "fixed-pairs" || (
+      candidate.players.length >= 4 &&
+      Array.isArray(candidate.teams) &&
+      candidate.teams.every((team) => Array.isArray(team) && team.length === 2 && team.every((index) => Number.isInteger(index) && index >= 0 && index < candidate.players!.length)) &&
+      candidate.teams.flat().length === candidate.players.length &&
+      new Set(candidate.teams.flat()).size === candidate.players.length
+    )) &&
     typeof candidate.courtCount === "number" &&
     typeof candidate.targetScore === "number" &&
     isRoundCount(candidate.roundCount)

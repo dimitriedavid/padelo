@@ -133,7 +133,7 @@ export function HomePage() {
 function recentRoomMetadata(room: RecentRoom): string[] {
   return [
     formatShortTournamentDate(room.date),
-    room.mode ? displayMode(room.mode) : null,
-    room.playerCount !== undefined ? `${room.playerCount} players` : null,
+    room.mode ? displayMode(room.mode, room.format) : null,
+    room.playerCount !== undefined ? (room.format === "fixed-pairs" ? `${room.playerCount / 2} pairs` : `${room.playerCount} players`) : null,
   ].filter((item): item is string => Boolean(item));
 }

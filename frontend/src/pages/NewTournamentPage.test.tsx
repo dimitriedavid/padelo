@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NewTournamentPage } from "./NewTournamentPage";
 import { localDateString } from "../lib/tournament";
-import type { Tournament } from "../lib/types";
+import type { CreateTournamentRequest, Tournament } from "../lib/types";
 
 describe("NewTournamentPage", () => {
   afterEach(() => {
@@ -329,6 +329,91 @@ describe("NewTournamentPage", () => {
     await user.click(infiniteButton);
     expect(rounds).toHaveValue(3);
     expect(infiniteButton).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it.each(["americano", "mexicano"] as const)("creates fixed-pair %s with explicit teams", async (mode) => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ tournament: tournament() }), { status: 201 }),
+    );
+    render(<MemoryRouter><NewTournamentPage /></MemoryRouter>);
+    await user.click(screen.getByRole("radio", { name: /Fixed pairs/ }));
+    await user.click(screen.getByRole("radio", { name: mode === "americano" ? /Americano/ : /Mexicano/ }));
+    for (const [index, name] of [" Alex ", "Bianca", "Chris", "Dana"].entries()) {
+      await user.type(screen.getByLabelText(`Pair ${Math.floor(index / 2) + 1}, player ${index % 2 + 1}`), name);
+    }
+    await user.click(screen.getByRole("button", { name: /create room/i }));
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      mode, format: "fixed-pairs", players: ["Alex", "Bianca", "Chris", "Dana"], teams: [[0, 1], [2, 3]],
+    });
+  });
+
+  it("rejects incomplete pairs instead of shifting player indices", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    render(<MemoryRouter><NewTournamentPage /></MemoryRouter>);
+    await user.click(screen.getByRole("radio", { name: /Fixed pairs/ }));
+    await user.click(screen.getByRole("button", { name: "Add pair" }));
+    for (const [pair, slot, name] of [[1, 1, "Alex"], [2, 1, "Chris"], [2, 2, "Dana"], [3, 1, "Eli"], [3, 2, "Fatima"]] as const) {
+      await user.type(screen.getByLabelText(`Pair ${pair}, player ${slot}`), name);
+    }
+    await user.type(screen.getByLabelText("Pair 1, player 2"), "   ");
+    await user.click(screen.getByRole("button", { name: /create room/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter both player names in every pair");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes whole pairs and supports Enter navigation", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><NewTournamentPage /></MemoryRouter>);
+    await user.click(screen.getByRole("radio", { name: /Fixed pairs/ }));
+    expect(screen.getByRole("button", { name: "Remove pair 1" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Add pair" }));
+    await user.type(screen.getByLabelText("Pair 3, player 1"), "Eli{Enter}");
+    expect(screen.getByLabelText("Pair 3, player 2")).toHaveFocus();
+    await user.keyboard("Fatima{Enter}");
+    expect(screen.getByLabelText("Pair 4, player 1")).toHaveFocus();
+    expect(screen.getByLabelText("Pair 4, player 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove pair 2" }));
+    expect(screen.getByLabelText("Pair 2, player 1")).toHaveValue("Eli");
+    expect(screen.getByLabelText("Pair 2, player 2")).toHaveValue("Fatima");
+    expect(screen.queryByLabelText("Pair 4, player 1")).not.toBeInTheDocument();
+  });
+
+  it("restores nonadjacent prefilled team membership and uses fixed-team guidance", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ tournament: tournament() }), { status: 201 }),
+    );
+    const prefill: Omit<CreateTournamentRequest, "date"> = {
+      name: "Pairs night", mode: "americano", format: "fixed-pairs",
+      players: ["Alex", "Bianca", "Chris", "Dana", "Eli", "Fatima", "Gabi", "Hana"],
+      teams: [[0, 3], [2, 1], [4, 7], [6, 5]], courtCount: 1,
+      roundCount: { type: "fixed", value: 3 }, targetScore: 24,
+    };
+    render(<MemoryRouter initialEntries={[{ pathname: "/new", state: { prefill } }]}><NewTournamentPage /></MemoryRouter>);
+    expect(screen.getByLabelText("Pair 1, player 2")).toHaveValue("Dana");
+    expect(screen.getByLabelText("Pair 2, player 2")).toHaveValue("Bianca");
+    expect(screen.queryByText(/rounds needed for everyone/)).not.toBeInTheDocument();
+    expect(screen.getByText(/With limited courts, some pairs sit out/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Americano rules" }));
+    expect(screen.getByText("Partners stay together and collect points as a team.")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: /create room/i }));
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      format: "fixed-pairs", players: ["Alex", "Dana", "Chris", "Bianca", "Eli", "Hana", "Gabi", "Fatima"],
+      teams: [[0, 1], [2, 3], [4, 5], [6, 7]],
+    });
+  });
+
+  it("pads an odd rotating roster with an empty partner when switching format", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><NewTournamentPage /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByPlaceholderText("Player 5"), "Eli");
+    await user.click(screen.getByRole("radio", { name: /Fixed pairs/ }));
+    expect(screen.getByLabelText("Pair 3, player 1")).toHaveValue("Eli");
+    expect(screen.getByLabelText("Pair 3, player 2")).toHaveValue("");
   });
 
   it("prefills copied tournament settings while clamping impossible courts", () => {
