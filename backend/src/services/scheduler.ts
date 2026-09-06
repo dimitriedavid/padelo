@@ -369,7 +369,7 @@ function createBalancedMatchPairGroups(
   );
   const beamWidth = 128;
   let states: MatchPairGroupSearchState[] = [
-    { groups: [], usedPairIndexes: new Set(), score: 0, streakScore: 0, orderKey: "" },
+    { groups: [], usedPairIndexes: new Set(), score: 0, streakScore: 0, longStreakScore: 0, maxOpponentCount: 0, repeatedOpponentPairs: 0, orderKey: "" },
   ];
 
   for (let index = 0; index < groupCount; index += 1) {
@@ -392,6 +392,9 @@ function createBalancedMatchPairGroups(
           usedPairIndexes,
           score: state.score + candidate.score,
           streakScore: state.streakScore + candidate.streakScore,
+          longStreakScore: state.longStreakScore + candidate.longStreakScore,
+          maxOpponentCount: Math.max(state.maxOpponentCount, candidate.maxOpponentCount),
+          repeatedOpponentPairs: state.repeatedOpponentPairs + candidate.repeatedOpponentPairs,
           orderKey: `${state.orderKey}:${candidate.order}`,
         });
       }
@@ -457,6 +460,9 @@ type MatchPairGroupCandidate = {
   sideB: [string, string];
   score: number;
   streakScore: number;
+  longStreakScore: number;
+  maxOpponentCount: number;
+  repeatedOpponentPairs: number;
   order: number;
 };
 
@@ -465,6 +471,9 @@ type MatchPairGroupSearchState = {
   usedPairIndexes: Set<number>;
   score: number;
   streakScore: number;
+  longStreakScore: number;
+  maxOpponentCount: number;
+  repeatedOpponentPairs: number;
   orderKey: string;
 };
 
@@ -488,6 +497,9 @@ function createMatchPairGroupCandidates(
 
       const key = matchPairGroupKey(sideA, sideB);
       const repeatedCourtGroupPenalty = previousCourtGroups.has(courtGroupKey(sideA, sideB)) ? 100 : 0;
+      const counts = sideA.flatMap((playerId) => sideB.map((opponentId) =>
+        opponentCounts.get(playerPairKey(playerId, opponentId)) ?? 0,
+      ));
 
       candidates.push({
         leftIndex,
@@ -496,6 +508,9 @@ function createMatchPairGroupCandidates(
         sideB,
         score: opponentRepeatCost(sideA, sideB, opponentCounts) + repeatedCourtGroupPenalty,
         streakScore: opponentStreakCost(sideA, sideB, opponentStreaks),
+        longStreakScore: opponentStreakCost(sideA, sideB, opponentStreaks, 1),
+        maxOpponentCount: Math.max(...counts),
+        repeatedOpponentPairs: counts.filter((count) => count > 0).length,
         order: preferredOrder.get(key) ?? roundPairs.length * roundPairs.length + candidates.length,
       });
     }
@@ -514,6 +529,19 @@ function compareMatchPairGroupSearchStates(
   first: MatchPairGroupSearchState,
   second: MatchPairGroupSearchState,
 ): number {
+  // Break long streaks, then limit the worst repeated encounter and broaden coverage.
+  if (first.longStreakScore !== second.longStreakScore) {
+    return first.longStreakScore - second.longStreakScore;
+  }
+
+  if (first.maxOpponentCount !== second.maxOpponentCount) {
+    return first.maxOpponentCount - second.maxOpponentCount;
+  }
+
+  if (first.repeatedOpponentPairs !== second.repeatedOpponentPairs) {
+    return first.repeatedOpponentPairs - second.repeatedOpponentPairs;
+  }
+
   if (first.score !== second.score) {
     return first.score - second.score;
   }
@@ -629,13 +657,15 @@ function opponentStreakCost(
   sideA: [string, string],
   sideB: [string, string],
   opponentStreaks: Map<string, number>,
+  allowedPreviousStreak = 0,
 ): number {
   let cost = 0;
 
   for (const playerId of sideA) {
     for (const opponentId of sideB) {
       const opponentStreak = opponentStreaks.get(playerPairKey(playerId, opponentId)) ?? 0;
-      cost += opponentStreak * opponentStreak;
+      const excess = Math.max(0, opponentStreak - allowedPreviousStreak);
+      cost += excess * excess;
     }
   }
 

@@ -154,6 +154,47 @@ describe("scheduler", () => {
     assertMaxConsecutiveOpponentStreak(state.rounds, 2);
   });
 
+  it("applies streak avoidance consistently to infinite Americano rounds", () => {
+    const tournamentConfig = config({
+      mode: "americano",
+      players: names(8),
+      courtCount: 2,
+      roundCount: "infinite",
+      scheduleSeed: "2026-07-08T18:05:18.999Z",
+    });
+    let state = createInitialTournamentState(tournamentConfig);
+    for (let index = 0; index < 9; index += 1) {
+      for (const match of state.rounds[index]!.matches) {
+        match.result = {
+          winningSide: "A", sideAScore: 15, sideBScore: 6,
+          enteredAt: "2026-07-08T19:00:00.000Z",
+        };
+      }
+      state = maybeAppendNextRound(tournamentConfig, state);
+    }
+    const fixed = createInitialTournamentState({
+      ...tournamentConfig, roundCount: { type: "fixed", value: 10 },
+    });
+
+    assert.equal(state.rounds.length, 10);
+    assert.deepEqual(roundSignature(state.rounds), roundSignature(fixed.rounds));
+    assertMaxConsecutiveOpponentStreak(state.rounds, 2);
+    assertNoRepeatedPartnerships(state.rounds.slice(0, 7));
+  });
+
+  it("still schedules a full court when opponent streaks cannot be avoided", () => {
+    const tournamentConfig = config({ mode: "americano", roundCount: "infinite" });
+    const state = completeFirstMatch(createInitialTournamentState(tournamentConfig));
+    const first = state.rounds[0]!;
+    state.rounds.push({ ...first, index: 1 });
+
+    const next = maybeAppendNextRound(tournamentConfig, state);
+    assert.equal(next.rounds.length, 3);
+    assert.equal(next.rounds[2]!.matches.length, 1);
+    assert.deepEqual(next.rounds[2]!.sittingOut, []);
+    assertRoundHasNoDuplicatePlayers(next.rounds[2]!);
+  });
+
   it("uses the Americano schedule seed to vary matchups for the same player order", () => {
     const first = createInitialTournamentState(
       config({
